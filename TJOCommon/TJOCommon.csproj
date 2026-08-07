@@ -1,0 +1,157 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="3.5" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.30729</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{ABE21CEC-06E8-4B58-8867-D658F82145E0}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>Alberdi.TJOCommon</RootNamespace>
+    <AssemblyName>TJOCommon</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="RestSharp, Version=105.2.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\RestSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.configuration" />
+    <Reference Include="System.Core">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data.SQLite, Version=1.0.119.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\System.Data.SQLite.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization">
+      <RequiredTargetFramework>3.0</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.ServiceModel">
+      <RequiredTargetFramework>3.0</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data.DataSetExtensions">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CDataBuffer.cs" />
+    <Compile Include="ComunicaMercadoPago\MsgAlertSmartPointMp.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ComunicaMercadoPago\MsgAlertSmartPointMp.Designer.cs">
+      <DependentUpon>MsgAlertSmartPointMp.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ComunicaMercadoPago\MsgCashoutMp.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ComunicaMercadoPago\MsgCashoutMp.Designer.cs">
+      <DependentUpon>MsgCashoutMp.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ComunicaMercadoPago\OperaQrCashout.cs" />
+    <Compile Include="ComunicaMercadoPago\OperaWebSmart.cs" />
+    <Compile Include="ComunicaMercadoPago\OrdenCaja.cs" />
+    <Compile Include="ComunicaMercadoPago\OrdenCashout.cs" />
+    <Compile Include="ComunicaMercadoPago\OrdenMp.cs" />
+    <Compile Include="ComunicaMercadoPago\RtaOrdenCaja.cs" />
+    <Compile Include="CRC16.cs" />
+    <Compile Include="ILog.cs" />
+    <Compile Include="PrismaECR\MsgAlertPrismaECR.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PrismaECR\MsgAlertPrismaECR.Designer.cs">
+      <DependentUpon>MsgAlertPrismaECR.cs</DependentUpon>
+    </Compile>
+    <Compile Include="PrismaECR\OperaPrismaECR.cs" />
+    <Compile Include="PrismaECR\PosAnulacionResponse.cs" />
+    <Compile Include="PrismaECR\PosCierreRequest.cs" />
+    <Compile Include="PrismaECR\PosCierreResponse.cs" />
+    <Compile Include="PrismaECR\PosPaymentRequest.cs" />
+    <Compile Include="PrismaECR\PosPaymentResponse.cs" />
+    <Compile Include="Prisma\AccesoDb.cs" />
+    <Compile Include="Prisma\MsgAlertPrisma.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Prisma\MsgAlertPrisma.Designer.cs">
+      <DependentUpon>MsgAlertPrisma.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Prisma\OperarTrxPrisma.cs" />
+    <Compile Include="Prisma\ProtocoloTrxPrisma.cs" />
+    <Compile Include="Prisma\RtaTrxPrisma.cs" />
+    <Compile Include="Prisma\TrxPrisma.cs" />
+    <Compile Include="TJOClient.cs" />
+    <Compile Include="VerifoneCommon\ShowCuota.cs" />
+    <Compile Include="VerifoneCommon\ShowTarjeta.cs" />
+    <Compile Include="VerifoneCommon\TransPrismaECR.cs" />
+    <Compile Include="VerifoneCommon\TransSmartPointMp.cs" />
+    <Compile Include="VerifoneCommon\TransVerifone.cs" />
+    <Compile Include="X25Request.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\InvelCrypt\ICryptManaged.vcproj">
+      <Project>{801E60AA-9695-4C3F-A773-E2229B1C0CE3}</Project>
+      <Name>InvelCrypt</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Service References\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ComunicaMercadoPago\MsgAlertSmartPointMp.resx">
+      <DependentUpon>MsgAlertSmartPointMp.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ComunicaMercadoPago\MsgCashoutMp.resx">
+      <DependentUpon>MsgCashoutMp.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="PrismaECR\MsgAlertPrismaECR.resx">
+      <DependentUpon>MsgAlertPrismaECR.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Prisma\MsgAlertPrisma.resx">
+      <DependentUpon>MsgAlertPrisma.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

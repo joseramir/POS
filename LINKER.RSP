@@ -1,0 +1,24 @@
+c:\dm\lib\cx.obj+tempDM\alert.obj+tempDM\compat.obj+tempDM\digits.obj+
+tempDM\dump.obj+tempDM\dumperr.obj+tempDM\enum.obj+tempDM\horafec.obj+
+tempDM\messg.obj+tempDM\mymath.obj+tempDM\opc.obj+tempDM\pos.obj+
+tempDM\cmos.obj+tempDM\emax.obj+tempDM\p300.obj+tempDM\p930.obj+tempDM\pbema.obj+
+tempDM\printer.obj+tempDM\cajero.obj+tempDM\chmode.obj+tempDM\corri.obj+
+tempDM\depto.obj+tempDM\envases.obj+tempDM\factu.obj+tempDM\ivas.obj+
+tempDM\miscs.obj+tempDM\mpago.obj+tempDM\plu.obj+tempDM\premios.obj+
+tempDM\subtot.obj+tempDM\db.obj+tempDM\idx.obj+tempDM\event.obj+
+tempDM\ini.obj+tempDM\kbd.obj+tempDM\mtask.obj+tempDM\serial.obj+
+tempDM\scanner.obj+tempDM\sleep.obj+tempDM\debug.obj+
+tempDM\bitmap.obj+tempDM\mozos.obj+tempDM\variab.obj+tempDM\promos.obj+
+tempDM\xfile.obj+tempDM\aget.obj+tempDM\programa.obj+tempDM\mystr.obj+
+tempDM\pcomp.obj+tempDM\winsup.obj+tempDM\posdisp.obj+tempDM\elige.obj+
+tempDM\wsup.obj+tempDM\suspend.obj+tempDM\xstring.obj+tempDM\xbrowse.obj+
+tempDM\create.obj+tempDM\index_on.obj+tempDM\maphand.obj+tempDM\schedul.obj+
+tempDM\color.obj+tempDM\ppr4.obj+tempDM\sync.obj+tempDM\tickfac.obj+
+tempDM\termo.obj+tempDM\ssaver.obj+tempDM\krnltbl.obj+tempDM\voucher.obj+
+tempDM\security.obj+tempDM\arraylist.obj+tempDM\ppr5.obj+tempDM\buscaplu.obj+
+tempDM\evaluator.obj+tempDM\functions.obj+tempDM\bdecimal.obj+tempDM\gcstatic.obj+
+tempDM\decnative.obj+tempDM\temphandler.obj+tempDM\tjonline.obj+tempDM\auditinfo.obj+tempDM\lic.obj+
+tempDM\sha1.obj+tempDM\genform.obj+tempDM\cobros.obj+tempDM\p220.obj+tempDM\plugin.obj
+bin\posx.exe
+pos.map
+c:\dm\lib\sdx.lib c:\dm\lib\x32.lib

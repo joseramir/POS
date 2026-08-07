@@ -1,0 +1,332 @@
+MODELO_W = -ml
+MODELO_D = -mx -DMODEL_FLAT -D_CONSOLE -DPOSDEBUG
+LINKFL_W =
+LINKFL_D = /STACK:50000 /M
+LIBRA_W  = KERNEL32.LIB USER32.LIB GDI32.LIB
+LIBRA_D  =
+ADICOB_W =
+ADICOB_D = c:\dm\lib\cx.obj+
+
+
+
+
+ADICOBJ  = $(ADICOB_D)
+MODELO   = $(MODELO_D)
+LINKFLAG = $(LINKFL_D)
+LIBRARIS = $(LIBRA_D)
+RESOURCE = $(RESOUR_D)
+
+
+
+
+
+PROJ     = POSX
+DEBUG    = 0
+CC       = sc
+AS       = qcl
+CFLAGS_G = $(MODELO) -wx -w2 -w7 -DINPOS -Ae -NV -C
+CFLAGS_D = -g
+CFLAGS_R = -DNDEBUG
+CFLAGS   = $(CFLAGS_G) $(CFLAGS_R)
+AFLAGS_G = /Cx /P1
+AFLAGS_D = /Zi
+AFLAGS_R = /DNDEBUG
+AFLAGS   = $(AFLAGS_G) $(AFLAGS_R)
+LFLAGS_G = $(LINKFLAG)
+LFLAGS_D = /co /map
+LFLAGS_R = 
+LFLAGS   = $(LFLAGS_G) $(LFLAGS_R)
+RUNFLAGS =
+OBJS_EXT =  
+LIBS_EXT =  
+
+.cpp.obj:
+            $(CC) $(CFLAGS) -c $? -o$@
+
+all: $(PROJ).EXE
+
+tempDM\tjonline.obj:    src\functions\tjonline.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\auditInfo.obj:   src\functions\auditInfo.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\bdecimal.obj:    src\BDecimal\BDecimal.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\decnative.obj:   src\BDecimal\DecNative.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\temphandler.obj: src\BDecimal\TempHandler.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\krnltbl.obj:    src\kernel\krnltbl.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\compat.obj:     src\kernel\compat.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\dump.obj:       src\kernel\dump.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\debug.obj:       src\kernel\debug.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\dumperr.obj:    src\kernel\dumperr.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\enum.obj:       src\kernel\enum.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\horafec.obj:    src\kernel\horafec.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\messg.obj:      src\kernel\messg.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\mymath.obj:     src\kernel\mymath.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\opc.obj:        src\kernel\opc.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\schedul.obj:    src\kernel\schedul.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\sync.obj:       src\kernel\sync.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\pos.obj:        src\kernel\pos.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\event.obj:      src\kernel\event.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\ini.obj:        src\kernel\ini.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\kbd.obj:        src\kernel\kbd.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\mtask.obj:      src\kernel\mtask.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\serial.obj:     src\kernel\serial.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\ssaver.obj:     src\kernel\ssaver.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\termo.obj:      src\screenobj\termo.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\sleep.obj:      src\kernel\sleep.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\bitmap.obj:     src\kernel\bitmap.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\mystr.obj:      src\kernel\mystr.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\xstring.obj:    src\kernel\xstring.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+                
+tempDM\aget.obj:       src\screenobj\aget.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\wsup.obj:       src\screenobj\wsup.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\elige.obj:      src\screenobj\elige.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\alert.obj:      src\screenobj\alert.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\digits.obj:     src\screenobj\digits.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\xbrowse.obj:    src\screenobj\xbrowse.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\color.obj:      src\screenobj\color.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\tickfac.obj:    src\functions\tickfac.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\scanner.obj:    src\devices\scanner.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\cmos.obj:       src\devices\cmos.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\emax.obj:       src\devices\emax.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\p300.obj:       src\devices\p300.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\ppr4.obj:       src\devices\ppr4.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\ppr5.obj:       src\devices\ppr5.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\pbema.obj:      src\devices\pbema.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\p930.obj:       src\devices\p930.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\posdisp.obj:    src\devices\posdisp.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+                
+tempDM\printer.obj:    src\devices\printer.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\cajero.obj:     src\functions\cajero.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\chmode.obj:     src\functions\chmode.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\corri.obj:      src\functions\corri.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\depto.obj:      src\functions\depto.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\envases.obj:    src\functions\envases.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\factu.obj:      src\functions\factu.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\ivas.obj:       src\functions\ivas.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\miscs.obj:      src\functions\miscs.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\mpago.obj:      src\functions\mpago.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\plu.obj:        src\functions\plu.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\buscaplu.obj:   src\functions\buscaplu.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\programa.obj:   src\functions\programa.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\pcomp.obj:      src\functions\pcomp.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\premios.obj:    src\functions\premios.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\subtot.obj:     src\functions\subtot.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\variab.obj:     src\functions\variab.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\mozos.obj:      src\functions\mozos.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\suspend.obj:    src\functions\suspend.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\evaluator.obj:  src\dbfhandler\evaluator.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\functions.obj:  src\dbfhandler\functions.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\promos.obj:    src\functions\promos.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\db.obj:         src\dbfhandler\db.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\idx.obj:        src\dbfhandler\idx.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\xfile.obj:      src\dbfhandler\xfile.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\create.obj:     src\dbfhandler\create.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\index_on.obj:   src\dbfhandler\index_on.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\maphand.obj:    src\functions\maphand.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\winsup.obj:     src\windows\winsup.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\voucher.obj:    src\kernel\voucher.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\security.obj:   src\kernel\security.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\arraylist.obj:   src\kernel\arraylist.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\lic.obj: src\kernel\lic.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\sha1.obj: src\kernel\sha1.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\genform.obj: src\screenobj\genform.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\cobros.obj: src\functions\cobros.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\p220.obj: src\devices\p220.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\gcstatic.obj: src\kernel\gcstatic.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+tempDM\plugin.obj: src\functions\plugin.cpp
+                $(CC) $(CFLAGS) -c $? -o$@
+
+$(PROJ).EXE: \
+    tempDM\alert.obj tempDM\compat.obj tempDM\digits.obj \
+    tempDM\dump.obj tempDM\dumperr.obj tempDM\enum.obj \
+    tempDM\horafec.obj tempDM\messg.obj tempDM\mymath.obj \
+    tempDM\opc.obj tempDM\pos.obj tempDM\cmos.obj tempDM\promos.obj \
+    tempDM\emax.obj tempDM\p300.obj tempDM\p930.obj tempDM\pbema.obj \
+    tempDM\posdisp.obj tempDM\printer.obj tempDM\cajero.obj \
+    tempDM\chmode.obj tempDM\corri.obj tempDM\depto.obj \
+    tempDM\envases.obj tempDM\factu.obj tempDM\ivas.obj \
+    tempDM\miscs.obj tempDM\mpago.obj tempDM\plu.obj \
+    tempDM\premios.obj tempDM\subtot.obj tempDM\db.obj \
+    tempDM\idx.obj tempDM\elige.obj tempDM\event.obj \
+    tempDM\ini.obj tempDM\kbd.obj tempDM\mtask.obj \
+    tempDM\serial.obj tempDM\wsup.obj tempDM\scanner.obj \
+    tempDM\sleep.obj tempDM\debug.obj tempDM\functions.obj \
+    tempDM\bitmap.obj tempDM\mozos.obj tempDM\evaluator.obj \
+    tempDM\variab.obj tempDM\suspend.obj tempDM\aget.obj \
+    tempDM\mystr.obj tempDM\programa.obj tempDM\winsup.obj \
+    tempDM\xfile.obj tempDM\pcomp.obj tempDM\buscaplu.obj \
+    tempDM\xstring.obj tempDM\xbrowse.obj tempDM\create.obj \
+    tempDM\index_on.obj tempDM\maphand.obj tempDM\schedul.obj \
+    tempDM\color.obj tempDM\ppr4.obj tempDM\ppr5.obj tempDM\gcstatic.obj \
+    tempDM\sync.obj tempDM\tickfac.obj tempDM\termo.obj \
+    tempDM\ssaver.obj tempDM\krnltbl.obj tempDM\voucher.obj \
+    tempDM\bdecimal.obj tempDM\decnative.obj tempDM\temphandler.obj \
+    tempDM\tjonline.obj tempDM\auditinfo.obj tempDM\lic.obj tempDM\sha1.obj \
+    tempDM\genform.obj tempDM\cobros.obj tempDM\p220.obj \
+    tempDM\security.obj tempDM\arraylist.obj tempDM\plugin.obj $(OBJS_EXT)
+
+    link @linker.rsp $(LFLAGS)

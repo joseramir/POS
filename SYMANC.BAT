@@ -1,0 +1,5 @@
+SET INCLUDE=c:\dm\INCLUDE;c:\dm\INCLUDE\WIN16;c:\dm\INCLUDE\WIN32;c:\pos\src\INCLUDE
+SET LIB=c:\dm\LIB
+SET HELP=c:\dm\HELP
+PATH=c:\dm\BIN;%PATH%
+

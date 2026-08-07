@@ -1,0 +1,509 @@
+/*
+ *   PPR4.c
+ *   Driver del impresor HASAR PR4F Fiscal.
+*/
+
+#include <stdafx.h>
+#include "pos.h"
+#include "wsup.h"
+#include "asigport.h"
+#include "serial.h"
+
+/*   Datos de este solo modulo   */
+static struct lstat_ lstatPR4;
+static char *pc;                // Para explorar respuestas.
+static int hPr4;                // Handler al device.
+static int inTickPR4;           // Indica que el PR4 tiene ticket abierto.
+
+/*   Cadenas especiales de control   */
+#ifdef PANTACOLOR
+static int prnesq[16] = {       // Esquema default de colores
+	{ ROJO * 16 + BLANCO },     // Color del borde
+	{ BLANCO * 16 + NEGRO },    // Titulo a ventana activa.
+	{ NEGRO * 16 + BLANCO },    // Titulo a ventana inactiva.
+	{ ROJO * 16 + VERDE }       // Texto contenido.
+};
+#else
+static int prnesq[16] = {       // Esquema default de colores
+	{ BLANCO * 16 + NEGRO },    // Color del borde
+	{ NEGRO * 16 + BLANCO },    // Titulo a ventana activa.
+	{ NEGRO * 16 + BLANCO },    // Titulo a ventana inactiva.
+	{ BLANCO * 16 + NEGRO }     // Texto contenido.
+};
+#endif
+
+/****************************************************************************
+ ***   Interfaz de bajo nivel - Sigue las especificaciones de los documentos
+ ***   "Descripcion de Comandos" y "El ECR Fiscal" emitidos por Cia HASAR.
+*/
+
+#define SEP     ''
+
+//   Prototipos   
+static char *chkdesPR4(char *s);
+static void chkStatusPR4(void);
+static char *getfldPR4(void);
+static unsigned long gethexaPR4(void);
+static void xchgPktPR4(char *);
+static unsigned long getdecPR4(void);
+
+/*   Variables de este modulo   */
+#define SIZEPR4BUFF 500
+
+static char rxBuff[SIZEPR4BUFF], txBuff[SIZEPR4BUFF], tmpBuff[SIZEPR4BUFF],
+            txBuff2[SIZEPR4BUFF];
+
+// Chequea las descripciones.
+//     (Se heredo del problema del TM300, no molesta...)
+// Se agrego el proceso de 'CAMBIO' de tipo de letra.
+char *chkdesPR4(char *s)
+{
+    char *ret, cModo;
+
+    //  Elimina caracteres extra¤os (incluye la ¥, que pena).
+    ret = s;
+	for( ; *s; s++)
+		if(*s < ' ' || *s > 'z')
+			*s = ' ';
+
+    //   Cambia la letra si corresponde.
+    s = ret;
+    if(*ret == '@')
+    {
+        cModo = *(ret + 1);
+        if(cModo == '0' || cModo == '4')
+        {
+            ret++;
+            *ret = (cModo == '0')? 'ð': 'ô';  // 240 y 244
+            strcat(ret, "ð");
+        }
+        else
+            ret += 2;
+    }
+    strcpy(s, ret);
+	return ret;
+}
+
+//  El paquete que se recibe como parametro lo envia al impresor. Posteriormente, queda
+//  en espera de la respuesta y, cuando la recibe, chequea los resultados.
+void xchgPktPR4(char *pkt)
+{
+    strcat(strcpy(tmpBuff, pkt), "\n");
+    write(hPr4, tmpBuff, strlen(tmpBuff));
+    rxBuff[0] = 0;
+    read(hPr4, rxBuff, SIZEPR4BUFF);
+    rxBuff[strlen(rxBuff) - 1] = 0;
+    pc = rxBuff;
+    lstatPR4.prnstat  = gethexaPR4();
+    lstatPR4.fiscstat = gethexaPR4();
+}
+
+/***************************************************************************
+ ***  Funciones de Mediano nivel para comunicarse con el PR4
+*/
+char *getfldPR4()         // Lee una string.
+{
+    char *r;
+    static char fld[60];
+
+	if(*pc == SEP) pc++;
+    if(pc >= rxBuff + SIZEPR4BUFF) return "";
+    for(r = fld; *pc != SEP; )
+		if(pc >= rxBuff + SIZEPR4BUFF || r >= fld + 60)
+			return "";
+		 else
+			*r++ = *pc++;
+	*r = 0;
+	return fld;
+}
+
+unsigned long gethexaPR4()          // Lee un nro expresado hexadecimal
+{
+	unsigned long res;
+    char *p;
+
+    for(p = getfldPR4(), res = 0l; isxdigit(*p); p++)
+	{
+		res *= 16;
+		res += (*p <= '9')? (*p - '0') : (
+		       (*p <= 'F')? (*p - 'A' + 10): (*p - 'a' + 10));
+	}
+	return res;
+}
+
+static unsigned long getdecPR4()          // Lee un nro expresado decimal
+{
+	unsigned long res;
+    char *p;
+
+    for(p = getfldPR4(), res = 0l; isdigit(*p); p++)
+	{
+		res *= 10;
+		res += *p - '0';
+	}
+	return res;
+}
+
+int chkFiscStatPR4()
+{
+	char *msg;
+
+    if((lstatPR4.fiscstat & 0x81) || (lstatPR4.fiscstat & 0x80))
+		msg = "Memoria Fiscal Llena";
+    else if(lstatPR4.fiscstat & 0x1)
+		msg = "Error al Verificar la Memoria Fiscal";
+    else if(lstatPR4.fiscstat & 0x2)
+		msg = "Error al Verificar la Memoria de Trabajo (CMOS)";
+    else if(lstatPR4.fiscstat & 0x40)
+		msg = "Monto Total excede lo permitido por el impresor";
+    else if(lstatPR4.fiscstat & 0x100)
+		msg = "Memoria fiscal CASI llena. Avise al Tecnico";
+    else if((lstatPR4.fiscstat & 0x800) && (lstatPR4.fiscstat & 0x2000))
+		msg = "Cierre el Ticket - El impresor no admite mas renglones";
+    else if((lstatPR4.fiscstat & 0x800) && !(lstatPR4.fiscstat & 0x2000))
+	{
+		msg = "Efectue una Zeta. El impresor asi lo requiere.";
+		FiscalForceZeta = 1;
+	}
+	else return 0;
+    #ifdef INPOS
+	Alert("Error Fiscal en la Impresora", msg);
+    #else
+    printf("Error Fiscal en la Impresora!!!\n");
+    #endif
+	return 1;
+}
+
+int chkPrnStatPR4()
+{
+	char *msg;
+
+    if(lstatPR4.prnstat & 0x4)
+		msg = "Error / Falla de Impresora";
+    else if(lstatPR4.prnstat & 8)
+        msg = "Impresora Fuera de Linea (OFFLINE)";
+    else if(lstatPR4.prnstat & 0x10)
+        msg = "Falta Papel en la Cinta Testigo";
+    else if(lstatPR4.prnstat & 0x20)
+        msg = "Falta Papel en el Ticket";
+    else return 0;
+
+    #ifdef INPOS
+	Alert("Error en la Impresora", msg);
+    #else
+    printf("Error '%s' en el TMPR4 !!!", msg);
+    #endif
+	return 1;
+}
+
+void chkStatusPR4()
+{
+    xchgPktPR4("*");
+    pc = rxBuff;
+
+    //  Completa la estructura de estado.
+    lstatPR4.prnstat  = gethexaPR4();
+    lstatPR4.fiscstat = gethexaPR4();
+    lstatPR4.lastcomp = getdecPR4();
+    lstatPR4.fecop    = getdecPR4();
+    lstatPR4.horaop   = getdecPR4();
+    lstatPR4.lastcie  = getdecPR4();
+    lstatPR4.archi1   = getdecPR4();
+    lstatPR4.archi2   = getdecPR4();
+    strcpy(lstatPR4.archi3, getfldPR4());
+    strcpy(lstatPR4.archi4, getfldPR4());
+}
+
+//   Queda esperando a que el PR4 este listo.
+int chkPR4()
+{
+    for( ;; )
+    {
+        chkStatusPR4();
+        if(chkPrnStatPR4()) continue;
+        if(chkFiscStatPR4()) continue;
+        break;
+    }
+	return 0;
+}
+
+/**************************************************************************
+ ***   Funciones de mediano nivel. Son llamadas por printer.c
+ *****/
+
+int ChkPrnXonXoffPR4()
+{
+	while(chkPR4() == 1)
+        ;
+	return 0;
+}
+
+/**************************************************************************
+ *   LINEAS DE COMPATIBILIDAD. - No se utilizan en impresores fiscales.
+*/
+
+//  Imprime una linea en la Cinta Testigo.
+int PrintJournalPR4()
+{
+	return 0;
+}
+
+//  Imprime una linea en el ticket y en la cinta testigo.
+int PrintAmbosPR4()
+{
+	return 0;
+}
+
+//  Imprime una linea en el ticket solamente.
+int PrintTickPR4()
+{
+	return 0;
+}
+
+//  Corta el ticket y avanza al siguiente renglon.
+int CutterPR4()
+{
+	return 0;
+}
+
+/**********************************************************************
+ *   LINEAS QUE MANEJAN LO FISCAL.
+*/
+
+//  Inicializa el impresor.
+int InitPrinterPR4()
+{
+    PrintTextAllowed = 0;       // No se puede usar 'PrintText'
+	return 0;
+}
+
+//   Abre la gaveta (Cajon de dinero). Utilizamos para esta tarea el dispo-
+//   sitivo presente en el impresor TMPR4 para activarla.
+int OpenDrwrPR4()
+{
+    xchgPktPR4("{");
+    return 0;
+}
+
+//   Funcion que deja todo en orden al finalizar (atexit)./
+void closePR4(void)
+{
+    close(hPr4);
+}
+
+//   Descarga en el printer todos los datos instalables.
+int UpLoadPR4()
+{
+    int i;
+
+    //  Establece el handler para manejar el impresor.
+    hPr4 = open("fisprn", O_RDWR | O_BINARY);
+    if(hPr4 < 0)
+        AbEnd("No puedo abrir el dispositivo fiscal HASAR (fisprn).");
+    atexit(closePR4);       // Cierra el handler al salir
+    chkPR4();               // Valida la comunicacion.
+
+    //  Capacidades del impresor
+    PrinterCap = PRN_FISCAL;
+
+    //  Mensaje!!!
+    SendMsg("Espere. Cargando el impresor HASAR ...", "");
+	for(i=0; i<cLinesLogo; i++)
+	{
+        chkdesPR4(LogoLines[i]);
+        sprintf(txBuff2, "]%d%s", i+1, LogoLines[i]);
+        xchgPktPR4(txBuff2);
+	}
+    for( ; i < 10; i++)         // Vacia las lineas no usadas.
+	{
+        sprintf(txBuff2, "]%d%c", i+1, '\x7f');
+        xchgPktPR4(txBuff2);
+	}
+
+	//  Carga la definicion del pie del ticket !!!
+	for(i=0; i<cLinesPie; i++)
+	{
+        chkdesPR4(LogoPie[i]);
+        sprintf(txBuff2, "]%d%s", i+11, LogoPie[i]);
+        xchgPktPR4(txBuff2);
+	}
+    for( ; i < 10; i++)         // Vacia las lineas no usadas.
+	{
+        sprintf(txBuff2, "]%d%c", i+11, '\x7f');
+        xchgPktPR4(txBuff2);
+	}
+
+    ClearMsg();
+	return 0;
+}
+
+//   Imprime un item de linea.
+int PrintItemPR4()
+{
+	char tdes[30];
+
+    chkdesPR4(f_des);
+	if(strlen(f_des) <= 20)
+		strcpy(tdes, f_des);
+	 else
+	 {
+		memmove(tdes, f_des, 20);
+		tdes[20] = 0;
+	 }
+
+    sprintf(txBuff, "B%s%.3lf%.2lf%.2lf%c%.2lf%c%c" ,
+            tdes, f_mult, f_monto, (double) f_tasa / 100, f_qual,
+            (double) f_variac / 100, '0', 'T');
+
+    //   Abre el ticket, si todavia no esta abierto.
+    if(!inTickPR4)
+    {
+        inTickPR4 = 1;
+        xchgPktPR4("@TT");
+        PrintClerk();
+    }
+
+    for( ;; )
+    {
+        xchgPktPR4(txBuff);
+        if(chkPrnStatPR4()) continue;
+        if(chkFiscStatPR4()) continue;
+        break;
+	}
+	return 0;
+}
+
+//   Imprime y chequea el subtotal de la operacion.
+int PrintSubtPR4()
+{
+	char tdes[30], pFlag;
+
+	pFlag = char(f_tasa);
+    chkdesPR4(f_des);
+	if(strlen(f_des) <= 20)
+		strcpy(tdes, f_des);
+	else
+	{
+		memmove(tdes, f_des, 20);
+		tdes[20] = 0;
+	}
+
+    sprintf(txBuff, "C%c%s0", pFlag, tdes);
+    xchgPktPR4(txBuff);
+    pc = rxBuff;
+
+    getfldPR4();                               // Estado de la impresora.
+    getfldPR4();                               // Estado fiscal.
+    getfldPR4();                               // Cuenta items de linea.
+    printerTot = 100.0 * atof_(getfldPR4());   // Total de mercaderia.
+	return 0;
+}
+
+//   Envia un monto de pago y, alternativamente, el cierre del ticket.
+int PrintMpagoPR4()
+{
+	char tdes[30];
+
+    chkdesPR4(f_des);
+	if(strlen(f_des) <= 25)
+		strcpy(tdes, f_des);
+	 else
+	 {
+		memmove(tdes, f_des, 25);
+		tdes[25] = 0;
+	 }
+
+    sprintf(txBuff, "D%s%.2lfT0", tdes, f_monto);
+    xchgPktPR4(txBuff);
+	if(f_qual)
+    {
+        xchgPktPR4("E");
+        inTickPR4 = 0;
+    }
+	return 0;
+}
+
+//   Envia al impresor fiscal un comando para que cancele todo el
+//   ticket actualmente en curso.
+int PrintCancelPR4()
+{
+    xchgPktPR4("DCANCELA0.00C0");
+    xchgPktPR4("E");
+    inTickPR4 = 0;
+	return 0;
+}
+
+//   Ordena al impresor que haga una zeta diaria.
+int PrintZetaPR4()
+{
+    xchgPktPR4("9\x1cZ");
+    inTickPR4 = 0;
+	return 0;
+}
+
+//   Envia un texto fiscal a la impresora.
+//
+int PrintTextPR4()
+{
+	char tdes[36];
+
+    chkdesPR4(f_des);
+	if(strlen(f_des) <= 32)
+		strcpy(tdes, f_des);
+	 else
+	 {
+		memmove(tdes, f_des, 32);
+		tdes[30] = 0;
+	 }
+
+    //   Abre el ticket, si todavia no esta abierto.
+    if(!inTickPR4)
+    {
+        inTickPR4 = 1;
+        xchgPktPR4("@TT");
+        PrintClerk();
+    }
+
+    sprintf(txBuff2, "A%s0", tdes);
+    xchgPktPR4(txBuff2);
+	return 0;
+}
+
+//   Ordena al impresor que abra un ticket no fiscal.
+int OpenVoucherPR4()
+{
+    xchgPktPR4("H");
+    return 0;
+}
+
+//   Imprime un texto NO fiscal.
+int PrintVoucherPR4()
+{
+    chkdesPR4(f_des);
+    sprintf(txBuff2, "I%s0", f_des);
+    xchgPktPR4(txBuff2);
+	return 0;
+}
+
+//   Cierra un ticket NO fiscal.
+int CloseVoucherPR4()
+{
+    xchgPktPR4("J");
+	return 0;
+}
+
+/*********************************************************************
+ *   Comandos para manejar la RAM USUARIO residente en el impresor
+ *   Fiscal.
+*/
+
+char *ReadRamPR4(int start, int cbytes)
+{
+    return "";
+}
+
+void WriteRamPR4(int start, int cbytes, char *buff)
+{
+
+}
+

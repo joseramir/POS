@@ -1,0 +1,120 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="3.5" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.30729</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{C11A29F2-D4A7-4AF7-8896-7470C6AC3234}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>LibEntidades</RootNamespace>
+    <AssemblyName>LibEntidades</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="RestSharp, Version=105.2.3.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\RestSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.configuration" />
+    <Reference Include="System.Core">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data.SQLite, Version=1.0.119.0, Culture=neutral, PublicKeyToken=db937bc2d44ff139, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>.\System.Data.SQLite.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data.DataSetExtensions">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Alberdi\ClienteComprobante.cs" />
+    <Compile Include="Alberdi\DetalleDoc.cs" />
+    <Compile Include="Alberdi\HeaderDoc.cs" />
+    <Compile Include="Alberdi\ImpuestoAplicado.cs" />
+    <Compile Include="Alberdi\PagoDoc.cs" />
+    <Compile Include="Alberdi\Parking\ClienteParking.cs" />
+    <Compile Include="Alberdi\Parking\DatosParking.cs" />
+    <Compile Include="Alberdi\Parking\ParkingPost.cs" />
+    <Compile Include="Alberdi\PromoAplicada.cs" />
+    <Compile Include="Alberdi\Reparticion.cs" />
+    <Compile Include="Alberdi\Sucursal.cs" />
+    <Compile Include="Alberdi\Syncworker.cs" />
+    <Compile Include="Alberdi\TipoIva.cs" />
+    <Compile Include="ConexionRed.cs" />
+    <Compile Include="Janis\Address.cs" />
+    <Compile Include="Janis\Bought.cs" />
+    <Compile Include="Janis\Brand.cs" />
+    <Compile Include="Janis\Carrier.cs" />
+    <Compile Include="Janis\Category.cs" />
+    <Compile Include="Janis\Client.cs" />
+    <Compile Include="Janis\ClienteJanis.cs" />
+    <Compile Include="Janis\EcommerceAccount.cs" />
+    <Compile Include="Janis\Invoice.cs" />
+    <Compile Include="Janis\InvoiceData.cs" />
+    <Compile Include="Janis\Item.cs" />
+    <Compile Include="Janis\Logistic.cs" />
+    <Compile Include="Janis\Marketing.cs" />
+    <Compile Include="Janis\Payment.cs" />
+    <Compile Include="Janis\PaymentMethodExtraInfo.cs" />
+    <Compile Include="Janis\Pedido.cs" />
+    <Compile Include="Janis\PedidoPos.cs" />
+    <Compile Include="Janis\Picked.cs" />
+    <Compile Include="Janis\Prices.cs" />
+    <Compile Include="Janis\Product.cs" />
+    <Compile Include="Janis\Promotion.cs" />
+    <Compile Include="Janis\Quantity.cs" />
+    <Compile Include="Janis\ReceiverData.cs" />
+    <Compile Include="Janis\Shipping.cs" />
+    <Compile Include="Janis\Sku.cs" />
+    <Compile Include="Janis\Status.cs" />
+    <Compile Include="Janis\StoreData.cs" />
+    <Compile Include="Janis\Substitute.cs" />
+    <Compile Include="Janis\Totals.cs" />
+    <Compile Include="Janis\Warehouse.cs" />
+    <Compile Include="Janis\Weighable.cs" />
+    <Compile Include="Loging.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Janis\RtaReqPedido.cs" />
+    <Compile Include="Alberdi\Ticketsyncrepository.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

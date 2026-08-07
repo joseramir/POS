@@ -1,0 +1,37 @@
+# --- Build output (native C++ and .NET subprojects, any depth) ---
+bin/
+obj/
+Debug/
+Release/
+temp/
+
+# --- Native C++ build leftovers ---
+*.obj
+*.exp
+*.ilk
+*.res
+*.map
+*.idb
+*.pch
+
+# --- VS2008 IDE / per-user state ---
+*.ncb
+*.suo
+*.opt
+*.plg
+*.aps
+*.user
+
+# --- Crash dumps ---
+*.dmp
+
+# --- Runtime data (real POS data, not source) ---
+*.dbf
+*.DBF
+*.idx
+*.IDX
+*.cdx
+*.fpt
+
+# --- Local Claude Code settings (personal, not shared) ---
+.claude/settings.local.json

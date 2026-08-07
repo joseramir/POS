@@ -1,0 +1,5 @@
+# Fuentes legacy en Windows-1252 con finales de linea mixtos (ver memoria
+# project-pos-source-encoding-ansi). Se desactiva toda normalizacion de
+# line-endings para que git guarde los bytes tal cual estan, sin arriesgar
+# corromper la codificacion ANSI ni generar diffs falsos por CRLF/LF.
+* -text
