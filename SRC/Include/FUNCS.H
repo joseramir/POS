@@ -249,6 +249,7 @@ struct DPromo_ {
 	char preciouni[13];
 	unsigned long fecha;				// Fecha y hora de la operacion
 	unsigned long hora;
+	int accionSeq;					// Indice 1-based de la accion que grabo el renglon (0 = grabado por version anterior)
 };
 #ifdef IN_DUMP
 dDbf_ xxDDPromo = { DPromo, {
@@ -266,6 +267,7 @@ dDbf_ xxDDPromo = { DPromo, {
 	{ SZ_CHAR*13,	'C', "vuelto" },	// cantidad llevada
 	{ SZ_ULONG,		'L', "fecha" },
 	{ SZ_ULONG,		'L', "hora" },
+	{ SZ_INT,		'I', "que_anula" },	// Indice de accion. Reusa una columna libre del DBF: NO cambia el esquema.
 	{0}
 }};
 #endif

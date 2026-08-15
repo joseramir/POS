@@ -12,12 +12,26 @@
 // pendiente al iniciar la caja (fwrite=0) como al aplicarse en vivo (fwrite=1).
 // Sirve para no recalcular ni reaplicar una promo que ya quedo grabada, sin
 // tener que volver a leer trans.dbf.
+//
+// Detalle por accion. Cada renglon DPromo lleva el indice 1-based de la accion
+// que lo genero (campo accionSeq, que viaja en una columna libre del DBF), asi
+// un ticket interrumpido por un reinicio se retoma en la accion exacta donde
+// quedo, en vez de saltear o repetir la promo entera.
+struct AccionAplicadaInfo
+{
+	int seq;
+	double montoAplicado;
+	int descarga;
+};
+
 struct PromoAplicadaInfo
 {
 	long long codPromo;
 	double montoAplicado;
 	int descarga;
 	bool aplicado;
+	bool legacy;					// Trae renglones sin accionSeq (grabados por la version anterior).
+	std::vector<AccionAplicadaInfo> acciones;
 };
 static std::vector<PromoAplicadaInfo> tablaPromosAplicadas;
 
@@ -32,16 +46,40 @@ static PromoAplicadaInfo *BuscaPromoAplicada(long long codPromo)
 	return NULL;
 }
 
-// Devuelve true solo si la promo ya tiene su accion de descuento/entrega
-// (premio==3, la que hace ProcPlu + RegisterPrize(3,...) confirmando el
-// renglon real en trans.dbf) confirmada. No alcanza con que exista un
-// renglon informativo (mensaje/leyenda, premio 1 o 2): si el reinicio de
-// la caja interrumpio la promo justo entre esa accion y la de descuento,
-// hay que permitir que AplicarPromociones() retome la accion que falta.
-static bool PromoYaAplicada(long long codPromo)
+// Devuelve true si la accion 'seq' (1-based) de la promo ya quedo grabada en
+// trans.dbf. En un ticket grabado por la version anterior no hay indice de
+// accion, asi que se cae al criterio viejo: la promo entera cuenta como hecha
+// si llego a grabar su renglon de descuento/entrega (premio==3).
+static bool AccionYaAplicada(long long codPromo, int seq)
 {
 	PromoAplicadaInfo *info = BuscaPromoAplicada(codPromo);
-	return info != NULL && info->aplicado;
+	if(info == NULL) return false;
+	if(info->legacy) return info->aplicado;
+	for(size_t i=0; i<info->acciones.size(); i++)
+	{
+		if(info->acciones[i].seq == seq)
+			return true;
+	}
+	return false;
+}
+
+// Corte grueso: solo saltea la promo si TODAS sus acciones ya quedaron
+// grabadas. Si queda alguna pendiente la promo vuelve a entrar, y el filtrado
+// fino accion por accion lo hace PromoDef::ApplyAction().
+static bool PromoTotalmenteAplicada(PromoDef *promo)
+{
+	PromoAplicadaInfo *info = BuscaPromoAplicada(promo->CodPromo);
+	if(info == NULL) return false;
+	if(info->legacy) return info->aplicado;
+
+	int total = promo->ActionCount();
+	if(total <= 0) return info->aplicado;
+	for(int i=1; i<=total; i++)
+	{
+		if(!AccionYaAplicada(promo->CodPromo, i))
+			return false;
+	}
+	return true;
 }
 
 // Vacia la tabla. Se llama al empezar un ticket nuevo (ResetPOSAcumInternal).
@@ -51,6 +89,7 @@ void LimpiarPromosAplicadas()
 }
 ::ArrayList *promos = NULL;
 PromoDef *actualPromo;			// Promocion actual bajo evaluacion, para el name-resolver
+int accionActualSeq = 0;		// Accion (1-based) en ejecucion, para sellar el renglon DPromo.
 bool promosCalc = false;		// Para evitar el calculo de las promociones mas de una vez.
 bool promosAplicadas = false;	// Para evitar aplicar promociones mas de una vez.
 bool forceReloadPromos = false;	// Indica que se deben recargar las promociones antes de usarlas.
@@ -313,7 +352,7 @@ void CalcularPromosAntesMP()
 			// Si esta promo ya quedo aplicada y grabada en el ticket actual, no
 			// hace falta volver a simularla: su descuento ya esta reflejado en
 			// el total real.
-			if(PromoYaAplicada(promo->CodPromo))
+			if(PromoTotalmenteAplicada(promo))
 				continue;
 
 			//para promociones por medio de pago
@@ -383,13 +422,10 @@ void AplicarPromociones()
 		{
 			PromoDef *promo = (PromoDef *)promos->Item(i);
 
-			// Si el reinicio de la caja se produjo despues de grabar la accion
-			// de descuento/entrega de esta promo en trans.dbf pero antes de
-			// terminar el resto del ticket, no hay que volver a aplicarla. Si
-			// solo se grabo un renglon informativo (mensaje) antes del reinicio,
-			// PromoYaAplicada() devuelve false y se reintenta: retoma la accion
-			// de descuento pendiente en vez de saltear la promo entera.
-			if(PromoYaAplicada(promo->CodPromo))
+			// Solo se saltea la promo si TODAS sus acciones ya quedaron grabadas
+			// en trans.dbf. Si el reinicio la corto por la mitad, vuelve a entrar
+			// y ApplyAction() retoma unicamente las acciones que faltan.
+			if(PromoTotalmenteAplicada(promo))
 				continue;
 
 			gNumMedioPago = promo->CodMP;
@@ -521,6 +557,7 @@ void ProcPromo(void *d, int fwrite)
 		PromoAplicadaInfo nueva;
 		nueva.codPromo = promo->codpromo;
 		nueva.aplicado = false;
+		nueva.legacy = false;
 		tablaPromosAplicadas.push_back(nueva);
 		infoAplic = &tablaPromosAplicadas.back();
 	}
@@ -539,6 +576,34 @@ void ProcPromo(void *d, int fwrite)
 	// tras un reinicio, se reintente la accion de descuento pendiente.
 	if(promo->tpremio == 3)
 		infoAplic->aplicado = true;
+
+	// Asienta la accion concreta que grabo este renglon. accionSeq==0 significa
+	// que viene de un trans.dbf grabado por la version anterior: ahi no hay
+	// resume fino posible y la promo se marca como legacy.
+	if(promo->accionSeq > 0)
+	{
+		bool yaEsta = false;
+		for(size_t iac=0; iac<infoAplic->acciones.size(); iac++)
+		{
+			if(infoAplic->acciones[iac].seq == promo->accionSeq)
+			{
+				infoAplic->acciones[iac].montoAplicado = infoAplic->montoAplicado;
+				infoAplic->acciones[iac].descarga = infoAplic->descarga;
+				yaEsta = true;
+				break;
+			}
+		}
+		if(!yaEsta)
+		{
+			AccionAplicadaInfo nuevaAc;
+			nuevaAc.seq = promo->accionSeq;
+			nuevaAc.montoAplicado = infoAplic->montoAplicado;
+			nuevaAc.descarga = infoAplic->descarga;
+			infoAplic->acciones.push_back(nuevaAc);
+		}
+	}
+	else
+		infoAplic->legacy = true;
 
 	if(fwrite) WriteDump(promo);
 	if (fwrite && Dump::docActual != nullptr)
@@ -587,6 +652,46 @@ void ProcPromo(void *d, int fwrite)
 #endif
 }
 
+// Busca la definicion de una promo por su codigo.
+static PromoDef *BuscaPromoDef(long long codPromo)
+{
+	if(promos == NULL) return NULL;
+	for(int i=0; i<promos->Count(); i++)
+	{
+		PromoDef *promo = (PromoDef *)promos->Item(i);
+		if(promo->CodPromo == codPromo)
+			return promo;
+	}
+	return NULL;
+}
+
+// Repone acumSaldoPromo despues de reprocesar un ticket pendiente al iniciar
+// la caja. Es una variable de proceso y se pierde en el reinicio; sin ella
+// AlmacConsumo() (MPAGO.CPP) llama a ActualizaConsumo() en vez de
+// ActualizaConsumoCli(), y el saldocaja del cliente nunca se descuenta en la
+// BD aunque el ticket ya le haya dado el descuento.
+//
+// Ojo con la semantica: F_DescTotalIva2() ASIGNA acumSaldoPromo (y la pone en
+// 0 antes), no la acumula. O sea que vale el ultimo descuento aplicado, no la
+// suma de todos. Reconstruirla sumando descontaria de mas.
+void ReconstruirAcumSaldoPromo()
+{
+	for(size_t i=0; i<tablaPromosAplicadas.size(); i++)
+	{
+		PromoAplicadaInfo *info = &tablaPromosAplicadas[i];
+		PromoDef *promo = BuscaPromoDef(info->codPromo);
+		if(promo == NULL) continue;
+
+		for(size_t j=0; j<info->acciones.size(); j++)
+		{
+			if(!promo->AccionUsaSaldoCaja(info->acciones[j].seq))
+				continue;
+			double monto = info->acciones[j].montoAplicado;
+			acumSaldoPromo = monto < 0 ? -monto : monto;
+		}
+	}
+}
+
 void ApliPromoCobra()
 {
 	xTotal.ClearDescuento();
@@ -602,11 +707,10 @@ void ApliPromoCobra()
 		for(int i=0; i<promos->Count(); i++)
 		{
 			PromoDef *promo = (PromoDef *)promos->Item(i);
-			// Si esta promo ya quedo aplicada y grabada (accion de descuento/entrega
-			// confirmada, ver PromoYaAplicada) en un intento anterior de enviar este
-			// mismo ticket a caja cobradora, no hay que volver a simularla ni
-			// reaplicarla en un reintento (ver CHANGELOG 2026-08-06).
-			if(PromoYaAplicada(promo->CodPromo))
+			// Si esta promo ya quedo integramente aplicada y grabada en un intento
+			// anterior de enviar este mismo ticket a caja cobradora, no hay que
+			// volver a simularla ni reaplicarla (ver CHANGELOG 2026-08-06).
+			if(PromoTotalmenteAplicada(promo))
 				continue;
 			gNumMedioPago = promo->CodMP;			
 			gNumTarjeta = promo->NumTarjeta;
@@ -642,7 +746,7 @@ void ApliPromoCobra()
 			PromoDef *promo = (PromoDef *)promos->Item(i);
 			// Idem nota de arriba: si un reintento anterior ya dejo esta promo
 			// aplicada (descuento/entrega confirmado), no volver a dispararla.
-			if(PromoYaAplicada(promo->CodPromo))
+			if(PromoTotalmenteAplicada(promo))
 				continue;
 			if (promo->CodMP > 0 || promo->MarcaCli > 0)
 				continue;
@@ -681,6 +785,8 @@ void RegisterPrize(int premio, char *p1, char *p2, char *p3, bool imprime, int l
 	if(soloSimular) return;
 
 	dp.func = DPromo;
+	// dp no se memsetea: todo campo nuevo hay que inicializarlo aca a mano.
+	dp.accionSeq = accionActualSeq;
 	dp.nro = actualPromo->num;
 	dp.tpremio = premio;
 	dp.cod = actualPromo->CodPlu;
@@ -876,6 +982,8 @@ PromoDef::PromoDef(int promoNum)
 	actionExps = new ::ArrayList(false, "PromoDef-ActionExps");
 	cantidad = new ::ArrayList(false, "PromoDef-Cantidad");	
 	filterExp = NULL;
+	filterResult = NULL;			// ApplyAction() lo dereferencia: sin esto queda indeterminado.
+	accionesSaldoCajaMask = 0;
 	CodMP = 0;
 }
 
@@ -911,6 +1019,17 @@ void PromoDef::AddAction(char *act)
 	}
 	action->NameResolver = PromoNameResolver;
 	actionExps->Add(action);
+
+	// Marca las acciones que descuentan contra el saldocaja del cliente. La
+	// unica que lo hace es DESC_TOTIVACC (F_DescTotalIva2), que ademas es la
+	// unica que asigna acumSaldoPromo. Se detecta sobre el texto crudo de la
+	// accion: MarcaCli NO sirve como indicador, hay promos con MarcaCli>0 que
+	// no tocan saldocaja. El bit se prende despues del Add() para que el indice
+	// coincida con la posicion real en actionExps (arriba hay un return por
+	// error de compilacion que no agrega la accion).
+	int idxAccion = actionExps->Count();		// 1-based
+	if(idxAccion >= 1 && idxAccion <= 32 && strstr(act, "DESC_TOTIVACC") != NULL)
+		accionesSaldoCajaMask |= (1L << (idxAccion - 1));
 }
 
 void PromoDef::AddExpression(char *exp)
@@ -1112,6 +1231,10 @@ void PromoDef::ApplyAction()
 	char varName[100];
 
 	if(hasErrors) return;
+	// filterResult lo produce Evaluate(). AplicarPromociones() no llama a
+	// Evaluate(): depende de que CalcularPromosAntesMP() haya corrido antes en
+	// el mismo proceso. Si no corrio, esto era una lectura de memoria basura.
+	if(filterResult == NULL) return;
 	EvalReng *ver = (EvalReng *)evalRengs->Item(0);
 	actualPromo = this;
 	if(filterResult->ValueBoolean())
@@ -1160,6 +1283,14 @@ void PromoDef::ApplyAction()
 		// Ejecuta las acciones y analiza el resultado.
 		for(int i=0; i<actionExps->Count(); i++)
 		{
+			// Si esta accion ya quedo grabada en trans.dbf (ticket interrumpido
+			// por un reinicio de caja) no hay que repetirla: repetirla duplica el
+			// descuento y vuelve a llamar a los servicios externos que dispare
+			// (vouchers, stock de premios).
+			if(AccionYaAplicada(CodPromo, i + 1))
+				continue;
+
+			accionActualSeq = i + 1;
 			Expression *action = (Expression *)actionExps->Item(i);
 			Value *result = action->Run();
 			delete result;
@@ -1172,6 +1303,7 @@ void PromoDef::ApplyAction()
 				break;
 			}
 		}
+		accionActualSeq = 0;
 		enApplyAction = false;
 	}
 }

@@ -5,6 +5,108 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-13 - Promociones: control por accion ante reinicio de caja (saldocaja y servicios externos)
+
+### Contexto / sintoma
+
+El resguardo que evita reaplicar promociones tras un reinicio de caja (`PromoYaAplicada()`,
+parche del 2026-08-06) trabajaba **por promocion**: si la promo ya tenia grabado su renglon
+de descuento real (`tpremio == 3`) se salteaba entera, y si no, se re-ejecutaba entera.
+Ese corte grueso dejaba dos agujeros:
+
+1. **`saldocaja` sin descontar.** Al saltear la promo entera, `F_DescTotalIva2`
+   (`DESC_TOTIVACC`) no volvia a correr y la global `acumSaldoPromo` -que es de proceso y se
+   pierde en el reinicio- quedaba en 0. Al cerrar el ticket, `AlmacConsumo()` tomaba la rama
+   `ActualizaConsumo()` en vez de `ActualizaConsumoCli()`, asi que el `saldocaja` del cliente
+   NUNCA se descontaba en la BD aunque el ticket ya le hubiera dado el descuento.
+
+2. **Doble llamada a servicios externos.** Solo `tpremio == 3` marcaba la promo como aplicada,
+   pero TODAS las acciones con efecto externo (`VOUCHER_STOCK`, `VOUCHER_CUPON`, `VOUCHER_PROMO`,
+   `VOUCHER_DESCTO`, `VOUCHER_PINST`, `VOUCHER_GENVOC`, `VOUCHER_ROTRO`, `VOUCHER_GENVOCSC`)
+   graban `RegisterPrize(1, ...)`, que no cerraba la promo. Tras un reinicio se re-ejecutaban y
+   disparaban una segunda llamada real al servidor OC, que vuelve a descontar stock.
+
+Ademas, saltear la promo entera podia dejar sin ejecutar acciones que si correspondian: si el
+reinicio caia justo despues del descuento, un voucher posterior de la misma promo no se
+entregaba nunca.
+
+### Decision
+
+Se reemplaza el gate por-promocion por un gate **por accion**. Cada renglon `DPromo` que se
+graba en `trans.dbf` lleva ahora el indice 1-based de la accion que lo genero, de modo que al
+reanudar un ticket interrumpido se retoma exactamente en la accion donde quedo.
+
+**No se cambio el formato de `trans.dbf`.** `trans.dbf` es un DBF real con un unico esquema de
+44 columnas (`crStr`) compartido por los 41 tipos de registro, y los structs se serializan campo
+por campo contra columnas nombradas. El indice de accion se mapeo a `que_anula`, una columna que
+ya existia y que los renglones `func=26` no usaban. Los tickets pendientes grabados por la
+version anterior la leen en blanco (`atoi("") == 0`), que es justamente el valor reservado para
+"sin indice de accion": esas promos caen al comportamiento viejo (`legacy`), sin crash ni
+regresion. Agregar una columna nueva a `crStr` SI hubiera roto: `trDecode` hace `AbnormalEnd`
+si un `Get()` falla sobre un `trans.dbf` viejo.
+
+Sobre la reconstruccion de `acumSaldoPromo`: `F_DescTotalIva2()` **asigna** la variable (y la
+pone en 0 antes), no la acumula. O sea que vale el ultimo descuento aplicado, no la suma de
+todos. La reconstruccion respeta esa semantica (last-writer-wins); sumarlos habria descontado
+de mas si un ticket tuviera dos promos de saldocaja.
+
+La marca de "esta accion toca saldocaja" se detecta buscando `DESC_TOTIVACC` en el texto crudo
+de la accion, no por `MarcaCli`: hay promos con `MarcaCli > 0` que no tocan `saldocaja`.
+
+### Parche
+
+**`SRC/Include/FUNCS.H`**
+- Campo `accionSeq` al final de `struct DPromo_` (157 -> 161 bytes, sigue holgado bajo los 180
+  que fuerza `fijo_`) y entrada `{ SZ_INT, 'I', "que_anula" }` al final de `xxDDPromo`. El orden
+  struct <-> tabla tiene que coincidir: `trEncode` avanza con `p += xf->ancho`.
+
+**`SRC/Include/promo.h`**
+- `PromoDef::accionesSaldoCajaMask` (bitmask, hasta 32 acciones) + `AccionUsaSaldoCaja(idx)` y
+  `ActionCount()`. Prototipo de `ReconstruirAcumSaldoPromo()`.
+
+**`SRC/Functions/PROMOS.cpp`**
+- `PromoAplicadaInfo` ahora guarda el detalle por accion (`AccionAplicadaInfo`) y una marca
+  `legacy` para tickets de la version anterior.
+- `PromoYaAplicada()` se reemplaza por `AccionYaAplicada(codPromo, seq)` (corte fino) y
+  `PromoTotalmenteAplicada(promo)` (corte grueso: solo saltea la promo si TODAS sus acciones
+  quedaron grabadas). Los 4 call sites de `CalcularPromosAntesMP()`, `AplicarPromociones()` y
+  los dos loops de `ApliPromoCobra()` pasan a usar el corte grueso.
+- `PromoDef::ApplyAction()` saltea individualmente las acciones ya grabadas y sella
+  `accionActualSeq` antes de cada `action->Run()`.
+- `RegisterPrize()` graba `dp.accionSeq`. OJO: `dp` no se memsetea, todo campo nuevo hay que
+  inicializarlo a mano ahi.
+- `ProcPromo()` asienta la accion concreta de cada renglon, tanto en el reproceso de arranque
+  (`fwrite=0`) como en vivo (`fwrite=1`).
+- `PromoDef::AddAction()` prende el bit de saldocaja cuando la accion invoca `DESC_TOTIVACC`.
+- Nuevas `BuscaPromoDef()` y `ReconstruirAcumSaldoPromo()`.
+- **Hardening:** el constructor de `PromoDef` no inicializaba `filterResult`, y `ApplyAction()`
+  lo dereferencia sin chequear. `AplicarPromociones()` nunca llama a `Evaluate()`: depende de que
+  `CalcularPromosAntesMP()` haya corrido antes en el mismo proceso. Se inicializa a `NULL` y se
+  agrega la guarda, para no leer memoria indeterminada.
+
+**`SRC/Kernel/DUMP.CPP`**
+- `InitDump()` llama `ReconstruirAcumSaldoPromo()` despues del loop de reproceso de `trans.dbf`.
+  El orden es correcto: en `KRNLTBL.CPP` `InitPromos` (que carga las definiciones) corre antes
+  que `InitDump`.
+
+### Pendiente / fuera de alcance
+
+- `TRAER_PREMIOSTOCK` / `F_TraeStockPremio` descuenta stock en el servidor y no llama a
+  `RegisterPrize` en ningun camino, asi que no deja rastro: el gate por accion solo lo cubre
+  cuando esta anidado dentro de una accion que si graba. Cerrarlo requiere memoizar la respuesta
+  del servidor para devolverla en el replay.
+- `F_TraeStockPremio` y `F_VoucherC2` no cortan por `soloSimular`: le pasan el flag al servidor,
+  asi que cada ticket abre el socket dos veces (simula=1 y simula=0). Preexistente.
+- Ventana no atomica residual: si el corte cae entre la llamada al servidor y el `RegisterPrize`
+  de esa misma accion, la accion se repite. `VOUCHER_DESCTO` es el mas expuesto (genera el premio
+  antes de abrir el modal de ingreso de documento).
+- `mpago_2()` / `mpago_3()` llaman `AplicarPromociones()` sin pasar nunca por
+  `CalcularPromosAntesMP()` y no tienen el resguardo `if(!promosHechas){ promosCalc = false; }`
+  que si tiene `mpago_()`. La guarda de `filterResult` evita el comportamiento indefinido, pero
+  el flujo en si queda por revisar.
+
+---
+
 ## 2026-08-06 - ApliPromoCobra() sin reguardo de reintento (doble descuento al reenviar a caja cobradora)
 
 ### Contexto / síntoma

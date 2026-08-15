@@ -58,6 +58,7 @@ class PromoDef
 	Value *filterResult;
 	::ArrayList *cantidad;	
 	bool hasErrors;
+	long accionesSaldoCajaMask;	// Bit i-1 prendido = la accion i (1-based) descuenta contra saldocaja.
 
 public:
 	// Constructor y Destructor
@@ -88,6 +89,10 @@ public:
 
 	// Rutinas usadas durante la ejecucion.
 	inline bool HasRuntimeErrors() { return hasErrors; }
+	inline int ActionCount() { return actionExps->Count(); }
+	// idx es 1-based, igual que el accionSeq que se graba en trans.dbf.
+	inline bool AccionUsaSaldoCaja(int idx)
+		{ return idx >= 1 && idx <= 32 && (accionesSaldoCajaMask & (1L << (idx - 1))) != 0; }
 	void Reset(void);
 	void Evaluate(void);
 	void ApplyAction(void);
@@ -103,6 +108,7 @@ void CalcularPromosAntesMP();	// Calcula las promociones que aplican ANTES de lo
 void CalcularPromosDespuesMP();	// Calcula las promociones DESPUES de los Medios de Pago
 void AplicarPromociones();		// Aplica las promociones precalculadas.
 void LimpiarPromosAplicadas();	// Vacia la tabla de promociones ya aplicadas del ticket actual.
+void ReconstruirAcumSaldoPromo();	// Repone acumSaldoPromo tras reprocesar un ticket pendiente.
 void ApliPromoCobra();
 void PrintPromo(void *);
 

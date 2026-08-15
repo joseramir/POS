@@ -1295,6 +1295,11 @@ int InitDump()
 	GCStatic::AddLockToTrans("InitDump");
 	for(tDbf.Go(ActualTrans); !tDbf.Eof(); tDbf.Skip(1))
 		ReprocActualTran();
+	// El reproceso de arriba repuebla la tabla de promociones aplicadas via
+	// ProcPromo(). Con eso ya se puede reponer acumSaldoPromo, que es de
+	// proceso y se perdio en el reinicio: sin ella AlmacConsumo() no descuenta
+	// el saldocaja del cliente al cerrar el ticket.
+	ReconstruirAcumSaldoPromo();
 	if (Inicializando)
 		MostrarMayorEnPantalla();
 	GCStatic::ReleaseLockFromTrans("InitDump");
