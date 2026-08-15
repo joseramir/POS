@@ -29,6 +29,7 @@ void DisplayEstadoCaja();			// emax.cpp
 #ifdef POSXP
 #include "ArqueoTipo1.h"
 #include "ArqueoTipo2.h"
+#include "frmIngCodSuperv.h"
 #endif
 
 //   Prototipos
@@ -710,6 +711,85 @@ void superv(int cual)
 
 		clear(0);
 	}
+}
+
+//   Solicita en pantalla el codigo y clave de un supervisor para autorizar puntualmente
+//   una accion sensible (sin loguinear al supervisor ni cambiar el modo de la caja, a
+//   diferencia de 'superv()'). Hasta 3 intentos; cada intento (exito, clave invalida o
+//   cancelado) queda registrado en el log. Si autoriza, copia el nombre del supervisor
+//   en 'outNombreSuperv'. Devuelve 1 si un supervisor autorizo la operacion, 0 sino.
+int AutorizaSupervisorPuntual(char *msgAccion, char *outNombreSuperv, int maxLen)
+{
+#ifdef POSXP
+	char tempStr[20], nombre[50], clave[20];
+	int intentos = 0;
+
+	if(outNombreSuperv != NULL && maxLen > 0)
+		outNombreSuperv[0] = 0;
+
+	while(intentos < 3)
+	{
+		pos::frmIngCodSuperv ^fcod = gcnew pos::frmIngCodSuperv();
+		if(fcod->ShowDialog() != System::Windows::Forms::DialogResult::OK)
+		{
+			WLog("AUTORIZ.SUPERV - Cancelado por el usuario. Accion='%s'", msgAccion);
+			return 0;
+		}
+
+		int codigo = System::Convert::ToInt32(fcod->CodigoIng);
+
+		if(!dbclk.Use(F_Cajeros))
+		{
+			WLog("AUTORIZ.SUPERV - No pude abrir CAJEROS.DBF. Accion='%s'", msgAccion);
+			return 0;
+		}
+
+		sprintf(tempStr, "%4d", codigo);
+		bool encontrado = dbclk.Locate("codigo", tempStr) != 0;
+		int nivel = 0;
+		if(encontrado)
+		{
+			dbclk.Get("nivel", tempStr);
+			nivel = atoi(tempStr);
+		}
+
+		if(!encontrado || nivel < 3)
+		{
+			dbclk.Close();
+			intentos++;
+			WLog("AUTORIZ.SUPERV - Codigo invalido o sin nivel de supervisor. Codigo=%d, Intento=%d/3, Accion='%s'", codigo, intentos, msgAccion);
+			Alert("Codigo de Supervisor Invalido", "");
+			continue;
+		}
+
+		dbclk.Get("nombre", nombre);
+		dbclk.Get("clave", clave);
+		Trim(nombre);
+		Trim(clave);
+		dbclk.Close();
+
+		if(clave[0] && !CheckPassword(nombre, clave))
+		{
+			intentos++;
+			WLog("AUTORIZ.SUPERV - Clave incorrecta. Supervisor='%s' (Cod=%d), Intento=%d/3, Accion='%s'", nombre, codigo, intentos, msgAccion);
+			continue;
+		}
+
+		WLog("AUTORIZ.SUPERV - Autorizado. Supervisor='%s' (Cod=%d), Cajero=%d, Accion='%s'", nombre, codigo, ckaNro, msgAccion);
+		if(outNombreSuperv != NULL && maxLen > 0)
+		{
+			strncpy(outNombreSuperv, nombre, maxLen - 1);
+			outNombreSuperv[maxLen - 1] = 0;
+		}
+		return 1;
+	}
+
+	WLog("AUTORIZ.SUPERV - Intentos agotados (3). Accion='%s'", msgAccion);
+	Alert("Demasiados intentos fallidos.", "Operacion cancelada.");
+	return 0;
+#else
+	return 0;
+#endif
 }
 
 //   Funcion de procesamiento de la tecla de cajero.

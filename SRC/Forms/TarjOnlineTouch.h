@@ -21,6 +21,7 @@ using namespace Alberdi::TJOCommon::VerifoneCommon;
 
 #include "StaticDump.h"
 #include "FUNCS.H"
+#include "frmCuponManualPrisma.h"
 
 namespace pos {
 
@@ -37,10 +38,8 @@ namespace pos {
 	{
 	private:
 		double pend;
-		bool globalTouchEvent;	
-		
-		
-		
+		bool globalTouchEvent;
+
 		List <PromoMedioPago ^> ^actPromoMp;
 	private: System::Windows::Forms::Timer^  timerFaltan;
 	private: System::Windows::Forms::Label^  lbTotal;
@@ -183,6 +182,8 @@ namespace pos {
 	private: System::Windows::Forms::Label^  label1;
 
 	private: System::Windows::Forms::Label^  lbMonto;
+	private: System::Windows::Forms::Button^  btnCargaManual;
+	private: System::Windows::Forms::Button^  btnConsultarUltima;
 	private: System::ComponentModel::IContainer^  components;
 
 
@@ -228,6 +229,8 @@ namespace pos {
 			this->timerFaltan = (gcnew System::Windows::Forms::Timer(this->components));
 			this->lbTotal = (gcnew System::Windows::Forms::Label());
 			this->cboTarjetas = (gcnew System::Windows::Forms::ComboBox());
+			this->btnCargaManual = (gcnew System::Windows::Forms::Button());
+			this->btnConsultarUltima = (gcnew System::Windows::Forms::Button());
 			this->panel->SuspendLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->Icono))->BeginInit();
 			this->SuspendLayout();
@@ -246,7 +249,11 @@ namespace pos {
 			this->panel->Controls->Add(this->label2);
 			this->panel->Controls->Add(this->label1);
 			this->panel->Controls->Add(this->lbFaltan);
+			this->panel->Controls->Add(this->btnCargaManual);
+			this->panel->Controls->Add(this->btnConsultarUltima);
 			this->panel->Size = System::Drawing::Size(1024, 768);
+			this->panel->Controls->SetChildIndex(this->btnConsultarUltima, 0);
+			this->panel->Controls->SetChildIndex(this->btnCargaManual, 0);
 			this->panel->Controls->SetChildIndex(this->Titulo, 0);
 			this->panel->Controls->SetChildIndex(this->Icono, 0);
 			this->panel->Controls->SetChildIndex(this->panel3, 0);
@@ -495,9 +502,35 @@ namespace pos {
 			this->cboTarjetas->TabIndex = 139;
 			this->cboTarjetas->SelectedIndexChanged += gcnew System::EventHandler(this, &TarjOnlineTouch::cboTarjetas_SelectedIndexChanged);
 			this->cboTarjetas->PreviewKeyDown += gcnew System::Windows::Forms::PreviewKeyDownEventHandler(this, &TarjOnlineTouch::cboTarjetas_PreviewKeyDown);
-			// 
+			//
+			// btnCargaManual
+			//
+			this->btnCargaManual->Font = (gcnew System::Drawing::Font(L"Tahoma", 11.25F, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point,
+				static_cast<System::Byte>(0)));
+			this->btnCargaManual->Location = System::Drawing::Point(130, 560);
+			this->btnCargaManual->Name = L"btnCargaManual";
+			this->btnCargaManual->Size = System::Drawing::Size(300, 60);
+			this->btnCargaManual->TabIndex = 140;
+			this->btnCargaManual->Text = L"Carga Manual de Cupon";
+			this->btnCargaManual->UseVisualStyleBackColor = true;
+			this->btnCargaManual->Visible = false;
+			this->btnCargaManual->Click += gcnew System::EventHandler(this, &TarjOnlineTouch::btnCargaManual_Click);
+			//
+			// btnConsultarUltima
+			//
+			this->btnConsultarUltima->Font = (gcnew System::Drawing::Font(L"Tahoma", 11.25F, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point,
+				static_cast<System::Byte>(0)));
+			this->btnConsultarUltima->Location = System::Drawing::Point(130, 630);
+			this->btnConsultarUltima->Name = L"btnConsultarUltima";
+			this->btnConsultarUltima->Size = System::Drawing::Size(300, 60);
+			this->btnConsultarUltima->TabIndex = 141;
+			this->btnConsultarUltima->Text = L"Consultar Ultima Operacion";
+			this->btnConsultarUltima->UseVisualStyleBackColor = true;
+			this->btnConsultarUltima->Visible = false;
+			this->btnConsultarUltima->Click += gcnew System::EventHandler(this, &TarjOnlineTouch::btnConsultarUltima_Click);
+			//
 			// TarjOnlineTouch
-			// 
+			//
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(1024, 768);
@@ -559,6 +592,93 @@ namespace pos {
 				e->Handled = false;			
 			else			
 				e->Handled = true;			
+		}
+
+		// Completa el cupon con datos cargados a mano o recuperados por consulta al Prisma
+		// Integrado (en vez de la respuesta normal de HacerVenta), y sigue el mismo flujo de
+		// cierre que una aprobacion automatica.
+		void CompletarCuponManual(int lote, int cupon, System::String ^autor, System::String ^origen)
+		{
+			actuTarjVerifonePrisma->CodigoRespuesta = "0";
+			actuTarjVerifonePrisma->MensajeRespuesta = origen;
+			actuTarjVerifonePrisma->NroLote = lote;
+			actuTarjVerifonePrisma->NroCupon = cupon;
+			actuTarjVerifonePrisma->NroAutorizacion = autor;
+			actuTarjVerifonePrisma->OperacionTipo = actuTarjVerifonePrisma->ImporteCashBack > 0 ? "COMPRA+CASHBACK" : "COMPRA";
+			actuTarjVerifonePrisma->AlbEtapa = 3;
+
+			if (actPromoMp != nullptr)
+				Dump::promosmp->SetConfirmaDescto(actPromoMp[0]->NumMpago, actPromoMp[0]->NumTarjeta);
+			Dump::TarjPrisma->Add(actuTarjVerifonePrisma);
+			actuTarjVerifonePrisma = gcnew TransVerifone();
+
+			btnCargaManual->Visible = false;
+			btnConsultarUltima->Visible = false;
+
+			if (Dump::TarjPrisma->Count == 1)
+			{
+				bEnter_Click(this, System::EventArgs::Empty);
+				BaseDialog::btOk_Click(this, System::EventArgs::Empty);
+			}
+			else
+				Alert("No se autorizaron tarjetas", "...");
+		}
+
+		// Plan 1: carga 100% manual del cupon, autorizada por un supervisor. Pensado para
+		// cuando el Prisma Integrado aprueba la operacion pero no devuelve la respuesta.
+		System::Void btnCargaManual_Click(System::Object^ sender, System::EventArgs^ e)
+		{
+			if (indextar0 == cboTarjetas->SelectedIndex)
+			{
+				Alert("Debe elegir una tarjeta antes de cargar el cupon", "");
+				return;
+			}
+			CalculosImporte();
+
+			char nombreSuperv[50];
+			if (!AutorizaSupervisorPuntual("Carga Manual de Cupon Prisma (Autocobro)", nombreSuperv, 50))
+				return;
+
+			frmCuponManualPrisma ^fcupon = gcnew frmCuponManualPrisma();
+			if (fcupon->ShowDialog() != System::Windows::Forms::DialogResult::OK)
+				return;
+
+			CompletarCuponManual(fcupon->NroLoteIng, fcupon->NroCuponIng, fcupon->NroAutorIng,
+				"CARGA MANUAL - Superv: " + Strings::CharToString(nombreSuperv));
+		}
+
+		// Plan 2: consulta la ultima operacion aprobada en el Prisma Integrado (comando ULT) y,
+		// si el supervisor confirma que corresponde, la usa para completar el cupon.
+		System::Void btnConsultarUltima_Click(System::Object^ sender, System::EventArgs^ e)
+		{
+			if (indextar0 == cboTarjetas->SelectedIndex)
+			{
+				Alert("Debe elegir una tarjeta antes de consultar", "");
+				return;
+			}
+			CalculosImporte();
+
+			char nombreSuperv[50];
+			if (!AutorizaSupervisorPuntual("Consulta Ultima Operacion Prisma (Autocobro)", nombreSuperv, 50))
+				return;
+
+			OperarTrxPrisma ^hacer = gcnew OperarTrxPrisma(COM_NLD);
+			RtaTrans ^aux = hacer->ObtenerUltimaTrans();
+			if (hacer->ConError || aux == nullptr || aux->CodigoRespuesta != 0)
+			{
+				char msgErrorNewl[50];
+				if (hacer->ConError)
+					Strings::StringToChar(hacer->MensajeError, msgErrorNewl, 50);
+				Alert("No se pudo recuperar una operacion aprobada", hacer->ConError ? msgErrorNewl : "");
+				return;
+			}
+
+			frmCuponManualPrisma ^fcupon = gcnew frmCuponManualPrisma(aux->NumeroLote, aux->NumeroCupon, aux->CodigoAutorizacion, aux->Ult4Digitos, aux->Prim6Digitos);
+			if (fcupon->ShowDialog() != System::Windows::Forms::DialogResult::OK)
+				return;
+
+			CompletarCuponManual(fcupon->NroLoteIng, fcupon->NroCuponIng, fcupon->NroAutorIng,
+				"CONSULTA ULT.OPERACION - Superv: " + Strings::CharToString(nombreSuperv));
 		}
 
 		protected: virtual void OnLoad(EventArgs ^e) override
@@ -626,6 +746,9 @@ namespace pos {
 	protected: 
 		virtual void btOk_Click(Object ^sender, EventArgs ^e) override
 		{
+			btnCargaManual->Visible = false;
+			btnConsultarUltima->Visible = false;
+
 			ShowTarjeta^ mdatos = (ShowTarjeta^) cboTarjetas->SelectedItem;
 			if (!String::IsNullOrEmpty(mdatos->CodTarjetaPrisma))
 			{
@@ -672,7 +795,13 @@ namespace pos {
 					}
 				}
 				else
+				{
 					MessageBox::Show(otroMsg->MensajeError);
+					// No hubo respuesta clara del Prisma Integrado (pudo haberse aprobado igual):
+					// habilita las alternativas de carga manual / consulta, con autorizacion de supervisor.
+					btnCargaManual->Visible = true;
+					btnConsultarUltima->Visible = true;
+				}
 
 				//ClearMsg();
 				//otroMsg->CerrarVentana();

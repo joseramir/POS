@@ -1394,6 +1394,19 @@
 				</File>
 			</File>
 			<File
+				RelativePath=".\SRC\Forms\frmCuponManualPrisma.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\SRC\Forms\frmCuponManualPrisma.h"
+				FileType="3"
+				>
+				<File
+					RelativePath=".\SRC\Forms\frmCuponManualPrisma.resx"
+					>
+				</File>
+			</File>
+			<File
 				RelativePath=".\SRC\Forms\frmFactSql.cpp"
 				>
 			</File>
@@ -1403,6 +1416,19 @@
 				>
 				<File
 					RelativePath=".\SRC\Forms\frmFactSql.resx"
+					>
+				</File>
+			</File>
+			<File
+				RelativePath=".\SRC\Forms\frmIngCodSuperv.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\SRC\Forms\frmIngCodSuperv.h"
+				FileType="3"
+				>
+				<File
+					RelativePath=".\SRC\Forms\frmIngCodSuperv.resx"
 					>
 				</File>
 			</File>

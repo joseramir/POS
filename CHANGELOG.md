@@ -107,6 +107,57 @@ de la accion, no por `MarcaCli`: hay promos con `MarcaCli > 0` que no tocan `sal
 
 ---
 
+## 2026-08-13 - TarjOnlineTouch (autocobro): carga manual de cupon Prisma cuando no llega respuesta de aprobacion
+
+### Contexto / sintoma
+
+En las cajas de autocobro, las operaciones con tarjeta de credito por Prisma Integrado
+(no PrismaECR) a veces quedan aprobadas del lado del equipo pero la respuesta no vuelve
+por el protocolo serie (comunicacion), dejando el ticket a medias. Hasta ahora la unica
+salida era anular el ticket y recargar el cupon a mano en otra caja.
+
+### Decision
+
+Se agregan dos alternativas, habilitadas SOLO cuando falla la comunicacion con el Prisma
+(no ante un rechazo real de la operacion) y gateadas por autorizacion puntual de un
+supervisor (mismo mecanismo de CAJEROS.DBF + clave que usa `superv()`, pero sin loguinear
+al supervisor ni cambiar el modo de la caja):
+
+1. **Carga manual**: el supervisor autoriza y carga a mano lote/cupon/autorizacion.
+2. **Consultar ultima operacion**: se consulta al Prisma Integrado (comando ULT) la ultima
+   transaccion aprobada y, si el supervisor confirma que corresponde a la tarjeta usada
+   (el protocolo no informa monto ni cuotas en esta consulta, solo puede compararse contra
+   los ultimos 4 / primeros 6 digitos de la tarjeta), se usa para completar el cupon.
+
+Cada intento de autorizacion (exito, clave invalida, cancelado, intentos agotados) queda
+registrado en el log via `WLog`. Maximo 3 intentos antes de cancelar el pedido. El cupon
+resultante queda marcado en su mensaje de respuesta como carga manual o consulta, junto
+con el nombre del supervisor que autorizo, para poder diferenciarlo despues de una
+aprobacion automatica normal.
+
+### Parche
+
+**Archivos nuevos:**
+- `SRC/Forms/frmIngCodSuperv.h/.cpp/.resx`: dialogo touch para pedir el codigo de supervisor.
+- `SRC/Forms/frmCuponManualPrisma.h/.cpp/.resx`: dialogo touch de 3 campos (lote/cupon/
+  autorizacion), con constructor vacio (carga manual) y constructor precargado (consulta).
+
+**Archivos modificados:**
+- `SRC/Include/POS.H`, `SRC/Functions/CAJERO.CPP`: nueva funcion
+  `AutorizaSupervisorPuntual()`, variante de un solo uso de `superv()` (codigo + nivel>=3 +
+  clave via `CheckPassword`), con log de auditoria y limite de 3 intentos.
+- `SRC/Forms/TarjOnlineTouch.h`: se quito el scaffold muerto `AcceptSupervisorCode`/
+  `DoSupervCode` (estaba atado al lector de codigo de barras SERIE via `ScannerRedirectedFunc`,
+  que no aplica en autocobro porque el lector ahi es USB/teclado). Se agregaron los botones
+  `btnCargaManual` y `btnConsultarUltima` (ocultos por defecto, visibles solo cuando
+  `otroMsg->ConError` en `btOk_Click`) y sus handlers.
+- `POS.VCPROJ`: entradas de los 2 forms nuevos.
+
+Pendiente: compilar y validar en el escenario real (Prisma Integrado aprueba sin devolver
+respuesta) antes de dar el tema por cerrado.
+
+---
+
 ## 2026-08-06 - ApliPromoCobra() sin reguardo de reintento (doble descuento al reenviar a caja cobradora)
 
 ### Contexto / síntoma
