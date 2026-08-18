@@ -419,7 +419,7 @@ int GetSiNo(char *, char *);
 int GetSiNo(char *, char *, bool);
 void sleep_(int);
 int RequestSuperv(void);
-int AutorizaSupervisorPuntual(char *msgAccion, char *outNombreSuperv, int maxLen);	// Cajero.cpp
+int AutorizaUsuarioPuntual(char *msgAccion, char *outNombreUsuario, int maxLen);	// Cajero.cpp
 void SendMsg(char *, char *);
 void SendMsg(char *, char *, bool);
 void ClearMsg(void);

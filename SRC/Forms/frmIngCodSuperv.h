@@ -144,7 +144,7 @@ namespace pos {
 			// Titulo
 			//
 			this->Titulo->Size = System::Drawing::Size(317, 23);
-			this->Titulo->Text = L"Autorizacion de Supervisor";
+			this->Titulo->Text = L"Autorizacion de Usuario";
 			//
 			// bEnter
 			//
@@ -171,7 +171,7 @@ namespace pos {
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(220, 19);
 			this->label1->TabIndex = 39;
-			this->label1->Text = L"Codigo de Supervisor:";
+			this->label1->Text = L"Codigo de Cajero:";
 			//
 			// txtCodigo
 			//
@@ -225,7 +225,7 @@ namespace pos {
 		   {
 			   if (this->txtCodigo->Text->Trim()->Length == 0)
 			   {
-				   Alert("Debe ingresar el codigo de supervisor", "");
+				   Alert("Debe ingresar el codigo de cajero", "");
 				   return;
 			   }
 			   this->DialogResult = System::Windows::Forms::DialogResult::OK;

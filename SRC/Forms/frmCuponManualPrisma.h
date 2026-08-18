@@ -26,27 +26,12 @@ namespace pos {
 		int NroCuponIng;
 		System::String ^NroAutorIng;
 
-		// Carga 100% manual (Plan 1): los 3 campos arrancan vacios.
+		// Carga 100% manual: los 3 campos arrancan vacios y se tipean leyendo el cupon fisico.
 		frmCuponManualPrisma(void)
 		{
 			InitializeComponent();
 			Init();
 			this->Titulo->Text = "Carga Manual de Cupon";
-			this->lblVerificar->Visible = false;
-		}
-
-		// Precargado desde la consulta de ultima operacion al Prisma Integrado (Plan 2):
-		// el supervisor revisa/confirma los datos recuperados antes de aceptar.
-		frmCuponManualPrisma(int lote, int cupon, System::String ^autor, System::String ^ult4Dig, System::String ^prim6Dig)
-		{
-			InitializeComponent();
-			Init();
-			this->Titulo->Text = "Confirmar Ultima Operacion";
-			this->txtNroLote->Text = lote.ToString();
-			this->txtNroCupon->Text = cupon.ToString();
-			this->txtNroAutor->Text = autor;
-			this->lblVerificar->Text = "Verifique que corresponda a la tarjeta usada por el cliente:\nPrimeros 6: " + prim6Dig + "   Ultimos 4: " + ult4Dig;
-			this->lblVerificar->Visible = true;
 		}
 
 	private:
@@ -90,7 +75,6 @@ namespace pos {
 	private: System::Windows::Forms::TextBox^  txtNroAutor;
 	private: System::Windows::Forms::Label^  lblMensaje;
 	private: System::Windows::Forms::Timer^  tmrMensaje;
-	private: System::Windows::Forms::Label^  lblVerificar;
 
 	private: System::ComponentModel::IContainer^  components;
 
@@ -120,7 +104,6 @@ namespace pos {
 			this->txtNroAutor = (gcnew System::Windows::Forms::TextBox());
 			this->lblMensaje = (gcnew System::Windows::Forms::Label());
 			this->tmrMensaje = (gcnew System::Windows::Forms::Timer(this->components));
-			this->lblVerificar = (gcnew System::Windows::Forms::Label());
 			this->panel->SuspendLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->Icono))->BeginInit();
 			this->SuspendLayout();
@@ -135,9 +118,7 @@ namespace pos {
 			this->panel->Controls->Add(this->txtNroCupon);
 			this->panel->Controls->Add(this->txtNroAutor);
 			this->panel->Controls->Add(this->lblMensaje);
-			this->panel->Controls->Add(this->lblVerificar);
 			this->panel->Size = System::Drawing::Size(648, 567);
-			this->panel->Controls->SetChildIndex(this->lblVerificar, 0);
 			this->panel->Controls->SetChildIndex(this->lblMensaje, 0);
 			this->panel->Controls->SetChildIndex(this->txtNroAutor, 0);
 			this->panel->Controls->SetChildIndex(this->txtNroCupon, 0);
@@ -230,17 +211,6 @@ namespace pos {
 			this->txtNroAutor->Name = L"txtNroAutor";
 			this->txtNroAutor->Size = System::Drawing::Size(100, 26);
 			this->txtNroAutor->TabIndex = 53;
-			//
-			// lblVerificar
-			//
-			this->lblVerificar->Font = (gcnew System::Drawing::Font(L"Tahoma", 10, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point,
-				static_cast<System::Byte>(0)));
-			this->lblVerificar->ForeColor = System::Drawing::Color::Crimson;
-			this->lblVerificar->Location = System::Drawing::Point(84, 220);
-			this->lblVerificar->Name = L"lblVerificar";
-			this->lblVerificar->Size = System::Drawing::Size(480, 60);
-			this->lblVerificar->TabIndex = 56;
-			this->lblVerificar->Text = L"";
 			//
 			// lblMensaje
 			//

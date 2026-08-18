@@ -5,6 +5,58 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-18 - Carga manual de cupon Prisma: se quita la consulta de ultima operacion y se abre la autorizacion a cualquier cajero
+
+### Contexto / sintoma
+
+Dos cambios pedidos sobre la funcionalidad agregada el 2026-08-13 (carga manual de cupon
+en las cajas de autocobro, `SRC/Forms/TarjOnlineTouch.h`):
+
+1. **La consulta de ultima operacion es riesgosa.** El boton "Consultar Ultima Operacion"
+   traia del Prisma Integrado los datos de la ultima transaccion aprobada (comando `ULT`) y
+   precargaba el dialogo del cupon con ellos. Como el operador solo tiene que apretar
+   Aceptar, resulta tentador confirmarla sin controlar que el cupon fisico corresponda
+   realmente a esa operacion. Al no devolver el protocolo ni monto ni cuotas, no hay forma
+   de validar automaticamente que sea la operacion correcta: el control es puramente visual
+   y depende de que el operador lo haga.
+
+2. **La autorizacion exigia un supervisor.** Se pedia codigo de un usuario con `nivel >= 3`
+   en `CAJEROS.DBF`. Se pide que pueda autorizarla cualquier usuario/cajero dado de alta,
+   ingresando su numero de cajero y su clave.
+
+### Parche
+
+**Modificacion 1 - se elimina la consulta de ultima operacion:**
+- `SRC/Forms/TarjOnlineTouch.h`: se elimino el boton `btnConsultarUltima` (declaracion,
+  `InitializeComponent` y handler `btnConsultarUltima_Click`). Queda unicamente
+  `btnCargaManual`, que sigue oculto por defecto y solo se muestra cuando
+  `otroMsg->ConError` en `btOk_Click`.
+- `SRC/Forms/frmCuponManualPrisma.h`: se elimino el constructor precargado de 5 parametros
+  (lote/cupon/autorizacion + digitos parciales de tarjeta) y el label `lblVerificar` que
+  mostraba los digitos a confirmar; ambos quedaban sin uso. El dialogo arranca siempre con
+  los 3 campos vacios, para que se tipeen leyendo el cupon fisico.
+- No se toco `OperarTrxPrisma.ObtenerUltimaTrans()` en `TJOCommon/Prisma/`: sigue en uso
+  desde `frmAdicPrisma.h`.
+
+**Modificacion 2 - autoriza cualquier cajero, no solo un supervisor:**
+- `SRC/Functions/CAJERO.CPP`, `SRC/Include/POS.H`: `AutorizaSupervisorPuntual()` pasa a
+  llamarse `AutorizaUsuarioPuntual()` y se le quito la exigencia de `nivel >= 3`. Ahora
+  valida solamente que el codigo exista en `CAJEROS.DBF` y que la clave coincida via
+  `CheckPassword`. Se mantiene sin cambios el resto del comportamiento: no loguinea al
+  usuario ni cambia el modo de la caja, limite de 3 intentos, y log de auditoria de cada
+  intento (el prefijo paso de `AUTORIZ.SUPERV` a `AUTORIZ.USUARIO`).
+- Igual que antes, un usuario con el campo `clave` vacio en `CAJEROS.DBF` autoriza sin que
+  se le pida clave -- mismo criterio que usa el login normal de cajero (`superv()`).
+- `SRC/Forms/frmIngCodSuperv.h`: textos en pantalla ("Autorizacion de Usuario", "Codigo de
+  Cajero:"). El nombre del form y su archivo quedaron sin cambio para no tener que tocar
+  `POS.VCPROJ` ni el `.resx`.
+- La marca de trazabilidad del cupon pasa de `CARGA MANUAL - Superv: <nombre>` a
+  `CARGA MANUAL - Usuario: <nombre>`.
+
+Pendiente: compilar y validar en caja.
+
+---
+
 ## 2026-08-13 - Promociones: control por accion ante reinicio de caja (saldocaja y servicios externos)
 
 ### Contexto / sintoma
