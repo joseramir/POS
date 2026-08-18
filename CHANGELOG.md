@@ -277,6 +277,54 @@ respuesta) antes de dar el tema por cerrado.
 
 ---
 
+## 2026-08-10 - TicketSync: eliminar envío inmediato al cerrar el ticket, sincronizar solo desde SyncWorker
+
+### Contexto / síntoma
+
+Diagnóstico de la sesión del 2026-08-08: tickets fiscales duplicados en la base del
+webapi. Tres causas identificadas en `LibEntidades/Alberdi/`: (1) `MarcaSincronizadoPorSeq()`
+buscaba el ticket recién enviado entre los 200 pendientes más antiguos
+(`ObtenerPendientes(200)`) y con backlog >200 nunca lo encontraba, dejándolo sin marcar
+`SINCRONIZADO`; (2) un timeout de red no prueba que el servidor no haya procesado el POST;
+(3) carrera entre el envío inmediato al cerrar el ticket
+(`ClienteComprobante.PostComprobante`) y el reintento en background (`SyncWorker`), sin
+ningún "claim" de fila entre ambos caminos.
+
+### Decisión
+
+En vez de parchear las dos causas de forma incremental (marcar sincronizado por seq de
+forma directa + un estado transitorio tipo ENVIANDO), se optó por una simplificación de
+raíz: suprimir el intento de envío síncrono en el cierre del ticket y dejar que solo
+el `SyncWorker` en background envíe al webapi. `SyncWorker.ProcesarLote()` corre en un
+único hilo secuencial (sin reentrancia) y marca `SINCRONIZADO` por `Id` directo del lote
+que ya tiene en mano, no repite el patrón de búsqueda de `MarcaSincronizadoPorSeq()`.
+Esto elimina las causas #1 y #3 directamente, no solo las mitiga: ya no hay dos caminos que
+puedan enviar el mismo `seq`. La causa #2 (timeouts ambiguos) sigue viva dentro del propio
+`SyncWorker`, pero de fondo requiere idempotencia del lado del webapi, fuera del alcance de
+este cambio.
+
+### Parche
+
+**Archivo:** `LibEntidades/Alberdi/ClienteComprobante.cs`
+
+`PostComprobante()` ahora solo inserta el comprobante en el buffer SQLite local
+(`_syncRepo.InsertarPendiente`) y retorna `true`. Se eliminó el bloque de envío
+inmediato (intento HTTP con hasta 2 reintentos y timeout de 3s cada uno) y el helper
+`MarcaSincronizadoPorSeq()`, que quedaba sin uso. El único llamador
+(`SRC/Kernel/DUMP.CPP:3177`) solo usaba el valor de retorno booleano, que ya era siempre
+`true` en la implementación anterior; no cambia su comportamiento visible.
+
+### Nota
+
+Efecto colateral esperado: el cierre de ticket deja de bloquear la caja esperando red
+(antes hasta ~6s en el peor caso de 2 reintentos con timeout). A cambio, en el caso feliz
+el ticket ya no llega "casi inmediato" al webapi -- ahora depende del próximo ciclo del
+`SyncWorker` (cada 30s, lotes de 50). Implementado el 2026-08-10, sin compilar ni validar
+todavía.
+
+---
+
+
 ## 2026-08-06 - ApliPromoCobra() sin reguardo de reintento (doble descuento al reenviar a caja cobradora)
 
 ### Contexto / síntoma

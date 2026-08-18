@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-using RestSharp;
 using System.Configuration;
-using Newtonsoft.Json;
 
 using System.Data;
 using System.Data.SqlClient;
@@ -28,134 +26,29 @@ namespace LibEntidades.Alberdi
         public ClienteComprobante() { }
 
         /// <summary>
-        /// 1. Guarda el comprobante en el buffer SQLite local (siempre).
-        /// 2. Intenta el envío inmediato al endpoint.
-        ///    Si falla, el SyncWorker lo reintentará en segundo plano.
+        /// Guarda el comprobante en el buffer SQLite local. El envío al
+        /// endpoint queda exclusivamente a cargo del SyncWorker en
+        /// background: evita la carrera entre el envío inmediato y el
+        /// reintento, y el bug de marcar sincronizado buscando por Seq
+        /// en los 200 pendientes más antiguos.
         /// </summary>
         public bool PostComprobante(HeaderDoc doc)
         {
             ConError = false;
             MensajeError = "";
 
-            // ── PASO 1: buffer local garantizado ─────────────────────────
             try
             {
                 _syncRepo.InsertarPendiente(doc);
             }
             catch (Exception ex)
             {
-                // Loguear pero NO abortar: el ticket igual se intentará
-                // enviar por red; en el peor caso queda solo en trans.dbf
+                // Loguear pero NO abortar: el ticket ya está en trans.dbf;
+                // sin registro en el buffer no habrá sync, pero no bloquea el cierre.
                 Loging.EscribeExcepcion("PostComprobante.InsertarPendiente", ex);
             }
 
-            // ── PASO 2: intento inmediato al endpoint ─────────────────────
-            bool enviado = false;
-            int intentos = 0;
-
-            try
-            {
-                while (!enviado && intentos < 2)
-                {
-                    if (ConexionRed.comprobarIP(
-                            ConfigurationManager.AppSettings["ipapiventas"], 1))
-                    {
-                        string jsonToSend = JsonConvert.SerializeObject(
-                            doc,
-                            Formatting.None,
-                            new JsonSerializerSettings
-                            {
-                                NullValueHandling = NullValueHandling.Ignore
-                            });
-
-                        string url = string.Format(
-                            "http://{0}:{1}/api/ventas/comprobante",
-                            ConfigurationManager.AppSettings["ipapiventas"],
-                            ConfigurationManager.AppSettings["portapiventas"]);
-
-                        RestClient cliente = new RestClient(url);
-                        RestRequest request = new RestRequest();
-                        request.Timeout = 3000;
-                        request.Method = Method.POST;
-                        request.AddHeader("Content-Type", "application/json");
-                        request.AddParameter("application/json",
-                            jsonToSend, ParameterType.RequestBody);
-
-                        IRestResponse rta = cliente.Execute(request);
-
-                        if (rta.StatusCode == System.Net.HttpStatusCode.OK)
-                        {
-                            enviado = true;
-
-                            // Marcar como sincronizado en SQLite para que el
-                            // SyncWorker no lo reenvíe innecesariamente.
-                            // Buscamos el registro recién insertado por Seq.
-                            MarcaSincronizadoPorSeq(doc.Seq);
-                        }
-
-                        if (rta.ErrorException != null &&
-                            !string.IsNullOrEmpty(rta.ErrorMessage))
-                        {
-                            ConError = true;
-                            MensajeError = rta.ErrorMessage;
-                            Loging.EscribeMensaje(rta.ErrorMessage);
-                        }
-                        break;
-                    }
-                    else
-                    {
-                        ConError = true;
-                        MensajeError = "Sin comunicacion al servidor de APIVentas";
-                        Loging.EscribeMensaje("Sin comunicacion al servidor de APIVentas");
-                        intentos++;
-                        if (intentos < 2)
-                            System.Threading.Thread.Sleep(1500);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ConError = true;
-                MensajeError = ex.Message;
-                Loging.EscribeExcepcion("PostComprobante", ex);
-            }
-
-            // Aunque no se haya enviado por red, devolvemos true porque el
-            // ticket quedó guardado localmente y será sincronizado luego.
-            // Si el caller necesita distinguir ambos casos, exponer una
-            // propiedad adicional "EnviadoInmediato".
             return true;
-        }
-
-        // ----------------------------------------------------------------
-        //  Helpers privados
-        // ----------------------------------------------------------------
-
-        /// <summary>
-        /// Busca el id interno del ticket por su Seq y lo marca como
-        /// sincronizado. Solo se llama cuando el envío inmediato fue exitoso.
-        /// </summary>
-        private void MarcaSincronizadoPorSeq(string seq)
-        {
-            try
-            {
-                // Reutilizamos ObtenerPendientes con límite 1 y filtramos por seq.
-                // Es más simple que agregar un método nuevo al repositorio.
-                // Si hay mucho volumen conviene agregar un método específico.
-                var pendientes = _syncRepo.ObtenerPendientes(200);
-                foreach (TicketPendiente tp in pendientes)
-                {
-                    if (tp.Seq == seq)
-                    {
-                        _syncRepo.MarcarSincronizado(tp.Id);
-                        break;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Loging.EscribeExcepcion("MarcaSincronizadoPorSeq", ex);
-            }
         }
 
         public bool GuardaSqlServer(HeaderDoc doc)
