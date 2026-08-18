@@ -168,8 +168,8 @@ namespace LibEntidades.Alberdi.Parking
             try
             {
                 //La siguiente linea no funciona en ejecucion sí compila
-                //System.Net.ServicePointManager.SecurityProtocol = (System.Net.SecurityProtocolType)3072;// System.Net.SecurityProtocolType.Tls12;
-                System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls;
+                System.Net.ServicePointManager.SecurityProtocol = (System.Net.SecurityProtocolType)3072;// System.Net.SecurityProtocolType.Tls12;
+                //System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls;
                 RestClient cliente = new RestClient(urlParking);
                 RestRequest reqParking = new RestRequest();
                 reqParking.Method = Method.GET;
@@ -188,7 +188,7 @@ namespace LibEntidades.Alberdi.Parking
                     else
                     {
                         this.ConError = true;
-                        this.MensajeError = "No se encontraron datos de parking para el ID indicado.";
+                        this.MensajeError = "No se pudo consultar el Cierre parking.";
                         EscribeLog("No se encontraron datos de parking para el ID indicado.", "CAJA<=WEBPARK");
                     }
                     
