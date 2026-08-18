@@ -5,6 +5,54 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-08 - QuickVentas: archivos de venta rapida agarrados en el server, arqueo de cajero flotante sin impresion
+
+### Contexto / sintoma
+
+A veces, al hacer un arqueo, no salia la impresion porque el archivo de ventas generado
+por otra caja quedaba "agarrado" en la carpeta compartida del server y no se podia leer.
+La solucion manual era reiniciar la caja para liberar el archivo.
+
+Al cerrar sesion un cajero, `QuickVentas()` graba en la carpeta compartida un binario con
+el resumen de venta de ese cajero en esa caja. Un cajero "flotante" (que vende en varias
+cajas), al hacer arqueo, dispara `IncorporaVentaRemota()`, que busca TODOS los archivos
+de ese cajero en las demas cajas y los suma con `IncorporeOneFile()`.
+
+### Causa
+
+1. `QuickVentas()` e `IncorporeOneFile()` eran las unicas funciones del proyecto que
+   abrian archivos de la carpeta compartida con `open()`/`creat()` planos, sin modo de
+   comparticion explicito. El resto del codigo usa siempre `sopen()`/`_sopen()` con
+   `SH_DENYNO`/`SH_DENYRW`, necesario porque sin flag explicito el runtime intenta modo
+   "compatibilidad" (estilo DOS), no soportado en unidades de red (SMB): puede degradar a
+   un lock mas restrictivo de lo esperado o directamente a sharing violation cuando
+   escritor y lector se cruzan.
+2. Carrera real entre escritor y lector: si un cajero cierra sesion en una caja mientras
+   se dispara un arqueo de ese mismo cajero en otra, pueden pisarse.
+3. `IncorporeOneFile()` no logueaba nada si `open()` fallaba: el arqueo seguia adelante
+   como si esa caja no tuviera ventas, sin dejar rastro. Por eso el sintoma era "no sale
+   la impresion" sin ningun aviso.
+
+### Parche
+
+**Archivo:** `SRC/Kernel/DUMP.CPP`
+
+1. `sopen()` con modo de comparticion explicito: `SH_DENYRW` para el temporal de escritura
+   en `QuickVentas()`, `SH_DENYNO` para la lectura en `IncorporeOneFile()`, siguiendo el
+   mismo patron que el resto del proyecto.
+2. Escritura atomica: `QuickVentas()` ya no escribe directo sobre el nombre definitivo.
+   Escribe a `<archivo>.tmp` y al cerrar publica con
+   `MoveFileExA(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`. Un lector nunca
+   puede toparse con el archivo a medio escribir ni competir por el handle con el escritor.
+3. Logging con `WLog()` en los tres puntos de fallo (crear el temporal, publicar via
+   MoveFileEx, abrir el remoto para el arqueo), que antes fallaban en silencio.
+
+Compilado el 2026-08-08. En produccion desde el 2026-08-18. Pendiente: validar el
+escenario real (cierre de sesion de un cajero flotante en una caja mientras se dispara el
+arqueo de ese mismo cajero en otra).
+
+---
+
 ## 2026-08-18 - Parking: no se factura en el POS mientras la aplicacion de Estacionamiento no tenga hecho su cierre
 
 ### Contexto / objetivo

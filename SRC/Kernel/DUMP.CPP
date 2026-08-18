@@ -1510,7 +1510,13 @@ void ReadFromQuickFile(int h, int *cant, double *monto)
 // Incorpora a la venta de UN cajero, la informacion del archivo que se le indica.
 void IncorporeOneFile(char *fname)
 {
-	int h = open(fname, O_RDWR | O_BINARY);
+	int h = sopen(fname, O_RDWR | O_BINARY, SH_DENYNO);
+	if(h < 0)
+	{
+		char tErrMsg[300];
+		sprintf(tErrMsg, "ERROR - IncorporeOneFile no pudo abrir '%s' para el arqueo remoto (errno=%d)", fname, errno);
+		WLog(tErrMsg);
+	}
 	if(h >= 0)
 	{
 		AcumCajero *acClk = (AcumCajero *)ZetaCajeros->Find(ckaNro);
@@ -1603,11 +1609,18 @@ void QuickVentas(char *tfile, int soloCajero)
 	z_vended = s_vended;
 	z_plus = s_plus;
 
-	// Genera el archivo con las ventas.
-	char tMsg[200];
-	int h = creat(tfile, S_IREAD | S_IWRITE);
-	if(h >= 0) close(h);
-	h = open(tfile, O_RDWR | O_BINARY);
+	// Genera el archivo con las ventas. Se escribe primero a un temporal exclusivo de
+	// este proceso y recien se publica con el nombre definitivo via MoveFileEx (rename
+	// atomico), para que un lector remoto (arqueo de otra caja, IncorporeOneFile) nunca
+	// vea el archivo a mitad de escribir ni compita por el handle con el escritor.
+	char tMsg[200], tErrMsg[300], tTmpFile[130];
+	sprintf(tTmpFile, "%s.tmp", tfile);
+	int h = sopen(tTmpFile, O_CREAT | O_TRUNC | O_RDWR | O_BINARY, SH_DENYRW, S_IREAD | S_IWRITE);
+	if(h < 0)
+	{
+		sprintf(tErrMsg, "ERROR - QuickVentas no pudo crear '%s' (errno=%d)", tTmpFile, errno);
+		WLog(tErrMsg);
+	}
 	if(h >= 0)
 	{
 		if(soloCajero > 0)
@@ -1701,8 +1714,14 @@ void QuickVentas(char *tfile, int soloCajero)
 			}
 		}
 
-		// Cierra el archivo.
+		// Cierra el archivo temporal y lo publica de forma atomica (reemplaza el
+		// definitivo si ya existia) para que ningun lector lo vea a medio escribir.
 		close(h);
+		if(!MoveFileExA(tTmpFile, tfile, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+		{
+			sprintf(tErrMsg, "ERROR - QuickVentas no pudo publicar '%s' desde '%s' (GetLastError=%lu)", tfile, tTmpFile, GetLastError());
+			WLog(tErrMsg);
+		}
 	}
 
 	// Elimina la estructura de acumulacion usada.
