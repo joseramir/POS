@@ -161,8 +161,7 @@ namespace pos {
 			Button ^bt = gcnew Button();
 			bt->BackColor = Color::BurlyWood;
 			bt->TextAlign = ContentAlignment::MiddleRight;
-			bt->Text = TotalTarjetasPrismaECR(false).ToString("F2");
-			//bt->Text = TotalTarjetasTipre(false).ToString("N2");
+			bt->Text = TotalTarjetasPrismaECR(false).ToString("F2");			
 			bt->Font = titFont;
 			bt->Height = 40;
 			bt->Width = 150;
