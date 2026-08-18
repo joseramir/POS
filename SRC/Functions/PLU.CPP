@@ -815,6 +815,42 @@ void plu_(int cual)
 		//      another there).    
 		*end = '\0';
 
+		//   Con el estacionamiento habilitado, no se permite facturar mientras la aplicacion de
+		//   Parking no tenga hecho su cierre: 'autorizado' viene en true recien cuando el cierre
+		//   ya esta realizado. Si no se puede consultar el endpoint se deja facturar igual (para
+		//   no dejar la caja parada por una falla del servicio), pero queda registrado en el log.
+		if (procesaParking && !validadoCierreEstacionamiento)
+		{
+			LibEntidades::Alberdi::Parking::ClienteParking^ cliParking = gcnew LibEntidades::Alberdi::Parking::ClienteParking();
+			LibEntidades::Alberdi::Parking::AutorizacionCierre^ consuCierre = cliParking->ConsultaCierreRealizado();
+			bool cierreRealizado = true;
+			char msgConsu[100];
+
+			msgConsu[0] = '\0';
+			if (consuCierre == nullptr)
+				WLog("PARKING - No se pudo consultar el cierre de Estacionamiento; se permite facturar");
+			else if (!consuCierre->autorizado)
+			{
+				// Falta el cierre en la aplicacion de Parking: no se puede facturar.
+				cierreRealizado = false;
+				if (consuCierre->mensaje != nullptr)
+					Strings::StringToChar(consuCierre->mensaje, msgConsu, 100);
+				else
+					strcpy(msgConsu, "Falta realizar el cierre en Estacionamiento");
+				WLog("PARKING - Cierre de Estacionamiento sin realizar, no se factura. Msg='%s'", msgConsu);
+			}
+			else
+				validadoCierreEstacionamiento = true;		// Ya verificado, no reconsultar en este ticket.
+
+			delete consuCierre;
+
+			if (!cierreRealizado)
+			{
+				Alert(msgConsu, "");
+				return;
+			}
+		}
+
 		if (!(janisEcom || procesaParking) && !stricmp("descarga", msg))
 		{
 			sprintf(msg, "[Codigo: %s]", usacod);

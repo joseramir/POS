@@ -2743,6 +2743,8 @@ void ResetPOSAcumInternal()
 	baplitissh = false;
 	bApliPerIva = false;
 
+	validadoCierreEstacionamiento = false;
+
 	//para borrar el motivo de NC
 	motivoNotaCredito[0] = 0;
 	supervNotaCredito[0] = 0;

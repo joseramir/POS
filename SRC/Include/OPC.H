@@ -331,3 +331,6 @@ extern bool dummyHabil;
 
 //Para habilitar la integracion de QR Cashout MercadoPago
 extern bool mpCashout;
+
+//Para validar si esta hecho el cierre de Estacionamiento y evitar doble proceso
+extern bool validadoCierreEstacionamiento;

@@ -64,6 +64,7 @@
     <Compile Include="Alberdi\HeaderDoc.cs" />
     <Compile Include="Alberdi\ImpuestoAplicado.cs" />
     <Compile Include="Alberdi\PagoDoc.cs" />
+    <Compile Include="Alberdi\Parking\AutorizacionCierre.cs" />
     <Compile Include="Alberdi\Parking\ClienteParking.cs" />
     <Compile Include="Alberdi\Parking\DatosParking.cs" />
     <Compile Include="Alberdi\Parking\ParkingPost.cs" />

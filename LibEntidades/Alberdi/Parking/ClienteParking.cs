@@ -158,6 +158,74 @@ namespace LibEntidades.Alberdi.Parking
         }
 
 
+        public AutorizacionCierre ConsultaCierreRealizado()
+        {
+            AutorizacionCierre aux = null;
+
+            this.ConError = false;
+            string urlParking = "http://" + ConfigurationManager.AppSettings["ipapiparking"] + ":" + ConfigurationManager.AppSettings["portapiparking"] + "/autorizacion-cierre-caja";
+
+            try
+            {
+                //La siguiente linea no funciona en ejecucion sí compila
+                //System.Net.ServicePointManager.SecurityProtocol = (System.Net.SecurityProtocolType)3072;// System.Net.SecurityProtocolType.Tls12;
+                System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls;
+                RestClient cliente = new RestClient(urlParking);
+                RestRequest reqParking = new RestRequest();
+                reqParking.Method = Method.GET;
+                reqParking.AddHeader("Content-Type", "application/json");
+                reqParking.AddHeader("X-API-Key", ConfigurationManager.AppSettings["apikeyparking"]);
+                EscribeLog("Consulto estado del cierre", "CAJA=>WEBPARK");
+                IRestResponse respuesta = cliente.Execute(reqParking);
+                if (respuesta.StatusCode == System.Net.HttpStatusCode.OK)                
+                {
+                    AutorizacionCierre data = Newtonsoft.Json.JsonConvert.DeserializeObject<AutorizacionCierre>(respuesta.Content.ToString());
+                    if (data != null)
+                    {
+                        aux = data;
+                        EscribeLog(string.Format("Recibido OK - {0}", aux.ToString()), "CAJA<=WEBPARK");
+                    }
+                    else
+                    {
+                        this.ConError = true;
+                        this.MensajeError = "No se encontraron datos de parking para el ID indicado.";
+                        EscribeLog("No se encontraron datos de parking para el ID indicado.", "CAJA<=WEBPARK");
+                    }
+                    
+                }
+                else
+                {
+                    if (respuesta.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                    {
+                        MensajeError = "BadRequest-Algun dato enviado esta mal";
+                    }
+                    else if (respuesta.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        MensajeError = "NotFound- No se encontro una Orden con la IDPARKING indicada";
+                    }
+                    else if (respuesta.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+                    {
+                        MensajeError = "InternalServerError - Error interno de servidor API Parking";
+                    }
+                    else
+                    {
+                        MensajeError = "Verificar la comunicacion con el servidor.";
+                    }
+                    EscribeLog(MensajeError, "CAJA<=WEBPARK");
+                    ConError = true;
+                }
+
+            }
+            catch (Exception ex)
+            {
+                this.ConError = true;
+                this.MensajeError = ex.Message;
+                EscribeLog(string.Format("ERROR - Mensaje: {0}, Excepcion: {1}", ex.Message, ex.StackTrace));
+            }
+            return aux;
+        }
+
+
         public void EscribeLog(string line, string sentido)
         {
             StreamWriter writer = File.AppendText(Directory.GetCurrentDirectory() + "\\LogParking.txt");

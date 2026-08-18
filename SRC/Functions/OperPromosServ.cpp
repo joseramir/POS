@@ -101,15 +101,55 @@ void IngIdParking(int cual)
 	{
 		if (inOper == 0)
 		{
+			char msgConsu[100];
 			if (procesaParking)
 			{
+				//   Antes de operar con el estacionamiento se verifica que la aplicacion de Parking
+				//   tenga hecho su cierre ('autorizado' en true). Si todavia no lo hizo, no se opera.
+				//   Si no se puede consultar el endpoint se deja operar igual (para no dejar la caja
+				//   parada por una falla del servicio), pero queda registrado en el log.
+				validadoCierreEstacionamiento = false;
+				LibEntidades::Alberdi::Parking::ClienteParking^ cliParking = gcnew LibEntidades::Alberdi::Parking::ClienteParking();
+				LibEntidades::Alberdi::Parking::AutorizacionCierre^ consuCierre = cliParking->ConsultaCierreRealizado();
+				bool cierreRealizado = true;
+
+				msgConsu[0] = '\0';
+				if (consuCierre == nullptr)
+					WLog("PARKING - No se pudo consultar el cierre de Estacionamiento; se permite operar");
+				else if (!consuCierre->autorizado)
+				{
+					// Falta el cierre en la aplicacion de Parking: no se puede operar.
+					cierreRealizado = false;
+					if (consuCierre->mensaje != nullptr)
+						Strings::StringToChar(consuCierre->mensaje, msgConsu, 100);
+					else
+						strcpy(msgConsu, "Falta realizar el cierre en Estacionamiento");
+					WLog("PARKING - Cierre de Estacionamiento sin realizar, no se opera. Msg='%s'", msgConsu);
+				}
+				else
+				{
+					validadoCierreEstacionamiento = true;		// Ya verificado, no reconsultar en este ticket.
+					if (consuCierre->mensaje != nullptr)
+						Strings::StringToChar(consuCierre->mensaje, msgConsu, 100);
+				}
+
+				delete consuCierre;
+
+				if (!cierreRealizado)
+				{
+					Alert(msgConsu, "");
+					return;
+				}
+				if (msgConsu[0])
+					Alert(msgConsu, "");
+
 				frmIngNumParking^ fnumpedido = gcnew frmIngNumParking();
 				fnumpedido->ShowDialog();
 				if (fnumpedido->DialogResult == DialogResult::OK)
 				{
 					idParking = fnumpedido->NumIdParking == "" ? 0 : System::Convert::ToInt32(fnumpedido->NumIdParking);
 					delete fnumpedido;
-					LibEntidades::Alberdi::Parking::ClienteParking^ cliParking = gcnew LibEntidades::Alberdi::Parking::ClienteParking();
+
 					LibEntidades::Alberdi::Parking::DatosParking ^datosP = cliParking->GetDatosParking(idParking);
 					//LibEntidades::Alberdi::Parking::ListParking^ listaP = cliParking->GetDatosParking(NumIdParking);
 					if (cliParking->ConError)
@@ -119,23 +159,23 @@ void IngIdParking(int cual)
 					}
 
 					if (datosP != nullptr)
-					{						
+					{
 						if (datosP->PrecioUnitario > 0 && datosP->Cantidad > 0)
 						{
 							xReg = System::Convert::ToDouble(datosP->Codigo);
-							yReg = System::Convert::ToDouble(datosP->Cantidad);							
+							yReg = System::Convert::ToDouble(datosP->Cantidad);
 							xPrecEcom = System::Convert::ToDouble(datosP->PrecioUnitario) + 2e-10;
 							//xsJanisEsPesable = item->EsPesable;
 							Strings::StringToChar(datosP->PrecioUnitario.ToString("F2"), xsPrecEcom, 30);
 							plu(0);
-						}						
+						}
 					}
 					else
 						Alert("No encuentro el ID Estacionamiento", "Verificar numero y que este listo para cobrar");
 				}
 			}
 			else
-				Alert("No se puede llamar en medio de un ticket", "");
+				Alert("Opcion de Estacionamiento", "No habilitado");
 		}
 		else
 			Alert("Atencion!! no esta habilitada la opcion", "Para Estacionamiento");

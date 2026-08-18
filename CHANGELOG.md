@@ -5,6 +5,73 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-18 - Parking: no se factura en el POS mientras la aplicacion de Estacionamiento no tenga hecho su cierre
+
+### Contexto / objetivo
+
+En las cajas con `procesaParking` habilitado, el POS consulta a la aplicacion que factura el
+estacionamiento si ya se realizo su cierre de caja. Si el cierre NO esta hecho, no se permite
+facturar: el objetivo es forzar que esos cierres se hagan en la aplicacion de Parking.
+
+Endpoint nuevo `GET /autorizacion-cierre-caja` (header `X-API-Key`), consumido desde
+`ClienteParking::ConsultaCierreRealizado()`, que devuelve la entidad `AutorizacionCierre`
+(`autorizado` + `mensaje`). `autorizado == true` significa "el cierre ya esta realizado, se
+puede facturar".
+
+El control se aplica en dos puntos, gobernados por la global nueva
+`validadoCierreEstacionamiento` (que `ResetPOSAcumInternal()` resetea en cada ticket, asi que
+se consulta una vez por ticket y no una vez por articulo):
+
+- `IngIdParking()` (`OperPromosServ.cpp`): al entrar a la opcion de estacionamiento.
+- `plu_()` (`PLU.CPP`): antes de vender, para cubrir el caso en que no se paso por la opcion.
+
+**Ante un fallo de comunicacion con el endpoint se permite facturar igual (fail-open)**, para no
+dejar la caja parada por una caida del servicio de parking, dejando registro con `WLog`. Es una
+decision explicita: se asume que el control se puede evadir dejando el endpoint inaccesible, y a
+cambio queda el rastro en el log.
+
+### Correcciones sobre la primera version del parche
+
+La logica original tenia las condiciones invertidas en los dos puntos de control:
+
+1. **`PLU.CPP` bloqueaba la venta justo cuando el cierre SI estaba hecho.** La segunda rama
+   (`else if (consuCierre != nullptr)`) solo se alcanzaba con `autorizado == true`, y mostraba
+   "No se pudo Verficar el estado de cierre" antes de un `return`. En cambio, ante un fallo real
+   de comunicacion (`consuCierre == nullptr`) no entraba a ninguna rama y seguia de largo sin
+   avisar. Con `procesaParking` activo, eso bloqueaba toda venta normal.
+
+2. **`OperPromosServ.cpp` tenia una tercera rama muerta.** `else if (consuCierre != nullptr)`
+   nunca se alcanzaba, porque las dos anteriores ya cubrian ese caso; el fallo de comunicacion
+   no mostraba nada ni abria el dialogo. Ademas marcaba `validadoCierreEstacionamiento = true`
+   **tambien cuando el cierre no estaba hecho**, lo que salteaba el control de `plu_()` durante
+   el resto del ticket.
+
+Ambos se reescribieron con las mismas tres ramas explicitas (`nullptr` / `!autorizado` /
+autorizado), y solo se marca `validadoCierreEstacionamiento` en la rama autorizada, para que al
+hacer el cierre en la aplicacion de Parking se pueda reintentar sin cerrar el ticket. De paso:
+se agrego el chequeo de `mensaje != nullptr` con un texto por defecto, el buffer del mensaje paso
+de `char[50]` a `char[100]`, y `delete consuCierre` quedo en un punto alcanzable (en `PLU.CPP`
+era inalcanzable por los `return` previos).
+
+### Parche
+
+**Archivo nuevo:**
+- `LibEntidades/Alberdi/Parking/AutorizacionCierre.cs`: entidad de la respuesta del endpoint.
+
+**Archivos modificados:**
+- `LibEntidades/Alberdi/Parking/ClienteParking.cs`: `ConsultaCierreRealizado()`.
+- `LibEntidades/LibEntidades.csproj`: entrada de compilacion del archivo nuevo.
+- `SRC/Include/OPC.H`, `SRC/Functions/VARIAB.CPP`: global `validadoCierreEstacionamiento`.
+- `SRC/Kernel/DUMP.CPP`: reset de la global en `ResetPOSAcumInternal()`.
+- `SRC/Functions/OperPromosServ.cpp`, `SRC/Functions/PLU.CPP`: los dos puntos de control.
+
+**Configuracion (NO incluida en este commit):** el parche necesita en `app.config` las claves
+`ipapiparking` / `portapiparking` apuntando al servidor de parking y la clave nueva
+`apikeyparking`. Se dejo `app.config` deliberadamente fuera del commit para no publicar la API
+key en el repositorio, asi que hay que configurarlo en cada caja.
+
+---
+
 ## 2026-08-18 - Carga manual de cupon Prisma: se quita la consulta de ultima operacion y se abre la autorizacion a cualquier cajero
 
 ### Contexto / sintoma
