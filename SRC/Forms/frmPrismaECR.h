@@ -600,14 +600,25 @@ private: System::ComponentModel::IContainer^  components;
 									 actuTarjVerifonePrisma->Ultimos4Digitos = mrta->Ult4Digitos;
 									 actuTarjVerifonePrisma->Prim6Digitos = mrta->Prim6Digitos;
 									 actuTarjVerifonePrisma->OperacionTipo = actuTarjVerifonePrisma->ImporteCashBack > 0 ? "COMPRA+CASHBACK" : "COMPRA";
-									 actuTarjVerifonePrisma->NombreCliente = ""; //mrta->NombreCliente;
+									 actuTarjVerifonePrisma->NombreCliente = ""; //mrta->NombreCliente;									 
 									 actuTarjVerifonePrisma->AlbEtapa = 3;
 									 //actuTarjVerifonePrisma->NroTerminal = System::Convert::ToString(mrta->TerminalId);
 									 this->faltante = faltante - actuTarjVerifonePrisma->ImporteIngresado;
 									 //para confirmar los descuentos por medio de pago
 									 if (actPromoMp != nullptr)
 										 Dump::promosmp->SetConfirmaDescto(actPromoMp[0]->NumMpago, actPromoMp[0]->NumTarjeta);
-									 Dump::TarjPrisma->Add(actuTarjVerifonePrisma);								  
+
+									 // Diagnostico del recargo $0.01: el valor con el que el cupon entra a la
+									 // lista, DESPUES de la espera de la autorizacion. Si difiere del que dejo
+									 // 'RECAFIN.ECR - Calculado', se corrompio durante esa ventana.
+									 WLog("RECAFIN.ECR - AlGuardar: ImporteRecargo=%.2lf ImporteIngresado=%.2lf Importe=%.2lf (lote=%d cupon=%d tarj=%d mpago=%d)",
+										 System::Convert::ToDouble(actuTarjVerifonePrisma->ImporteRecargo),
+										 System::Convert::ToDouble(actuTarjVerifonePrisma->ImporteIngresado),
+										 System::Convert::ToDouble(actuTarjVerifonePrisma->Importe),
+										 actuTarjVerifonePrisma->NroLote, actuTarjVerifonePrisma->NroCupon,
+										 actuTarjVerifonePrisma->AlbNroTarjeta, actuTarjVerifonePrisma->AlbNroMpago);
+
+									 Dump::TarjPrismaECR->Add(actuTarjVerifonePrisma);
 									 actuTarjVerifonePrisma = gcnew TransPrismaECR();
 									 lblFaltante->Text = "Faltan $: " + this->faltante.ToString("F2");
 									 LlenarLvw();
@@ -642,7 +653,7 @@ private: System::ComponentModel::IContainer^  components;
 				    lvw->BeginUpdate();
 				    lvw->Items->Clear();				    				
 					
-					for each (TransVerifone ^tagposnet in Dump::TarjPrisma)
+					for each (TransPrismaECR ^tagposnet in Dump::TarjPrismaECR)
 					{						
 						ListViewItem ^litem = gcnew ListViewItem();
 						litem->Text = tagposnet->Ultimos4Digitos;
@@ -962,8 +973,17 @@ private: System::Void cboTarjetas_PreviewKeyDown(System::Object^  sender, System
 
 							  frecargo = Decimal::ToDouble(Decimal::Round(rec, 2));
 							  ftasarecargo = cuo->Porcen;
-							  actuTarjVerifonePrisma->ImporteRecargo = Convert::ToDecimal(frecargo);					
+							  actuTarjVerifonePrisma->ImporteRecargo = Convert::ToDecimal(frecargo);
 							  actuTarjVerifonePrisma->Importe = actuTarjVerifonePrisma->ImporteIngresado + actuTarjVerifonePrisma->ImporteRecargo;
+
+							  // Diagnostico del recargo que queda en $0.01: deja registrado el recargo tal
+							  // como se calcula aca (origen), para poder compararlo despues contra el que
+							  // llega a mpago_() y contra el que termina facturado en el renglon del PLU.
+							  WLog("RECAFIN.ECR - Calculado: tasa=%.4lf uMonto=%.2lf cajaDescto=%.2lf rec=%.2lf -> ImporteRecargo=%.2lf, Importe=%.2lf (tarj=%d mpago=%d cuotas=%d)",
+								  cuo->Porcen, uMonto, System::Convert::ToDouble(cajaDescto), System::Convert::ToDouble(rec),
+								  System::Convert::ToDouble(actuTarjVerifonePrisma->ImporteRecargo),
+								  System::Convert::ToDouble(actuTarjVerifonePrisma->Importe),
+								  actualTarj->Definicion->Codigo, actualTarj->Definicion->MPago, lpcuotas);
 
 						  }
 						  delete actualTarj;

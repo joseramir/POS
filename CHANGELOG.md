@@ -5,6 +5,62 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-18 - PrismaECR: lista propia de cupones, recargo financiero propio, y trazas para el recargo que queda en $0.01
+
+### Contexto
+
+Los cupones de PrismaECR se guardaban en `Dump::TarjPrisma`, la lista de la integracion
+"Verifone Prisma" (la vieja), aprovechando que `TransPrismaECR` hereda de `TransVerifone`.
+`Dump::TarjPrismaECR` existia pero se usaba solo para anulaciones. Como consecuencia, el
+recargo financiero de las tarjetas ECR se facturaba dentro del loop de Prisma, mezclado
+con el de la otra integracion.
+
+Ademas sigue abierto un bug reportado 4 veces (dos de ellas la semana del 2026-08-11): en
+las cajas con PrismaECR habilitado, el renglon de recargo financiero (PLU 99997) queda
+facturado en **$0.01** en vez del monto que corresponde. La pantalla muestra el interes
+correcto y la tarjeta se autoriza por el importe correcto con recargo incluido, asi que
+el valor se pierde en algun punto entre el calculo y la facturacion. Tres hipotesis
+previas fueron descartadas por el usuario, y una cuarta (que `TransPrismaECR` sombreara la
+propiedad `ImporteRecargo`) se verifico y tambien se descarto: hereda limpio.
+
+### Parche
+
+**`SRC/Forms/frmPrismaECR.h`:** los cupones ECR pasan a guardarse en `Dump::TarjPrismaECR`
+(su lista propia) y `LlenarLvw()` la recorre con el tipo correcto (`TransPrismaECR` en vez
+de `TransVerifone`).
+
+**`SRC/Functions/MPAGO.CPP`:** loop propio de recargo financiero para
+`Dump::TarjPrismaECR`, con su `FacturarRecargo()` y su confirmacion de descuentos por
+medio de pago, en linea con los que ya existian para Posnet, Prisma y SmartPoint.
+
+### Trazas de diagnostico del recargo $0.01
+
+Se agrego una cadena de `WLog` con el prefijo comun `RECAFIN.` que permite seguir el
+recargo desde su origen hasta el renglon facturado, para resolver el bug en la proxima
+ocurrencia en vez de seguir deduciendo:
+
+- `frmPrismaECR.h` - `RECAFIN.ECR - Calculado`: tasa, monto, descuento por medio de pago y
+  el `ImporteRecargo` resultante, en el momento del calculo.
+- `frmPrismaECR.h` - `RECAFIN.ECR - AlGuardar`: el valor con el que el cupon entra a la
+  lista, DESPUES de la espera de la autorizacion (ventana de hasta 2 minutos).
+- `MPAGO.CPP` - `RECAFIN.POSNET|PRISMA|ECR|SMARTPOINT - Total a facturar`: el total de cada
+  lista antes de facturarlo, mas un renglon por cupon en los loops de Prisma y ECR. El
+  total se imprime con `%.17lg` para distinguir un 0.01 exacto de un residuo de redondeo.
+- `PLU.CPP` - `RECAFIN.FACTURA` (dentro de `FacturarRecargo()`): el valor recibido, el
+  string devuelto por `BDecimal::ToString()`, el decimal parseado, `precuni` y el importe
+  final. Es el que separa "llego mal desde el medio de pago" de "se corrompio en la
+  conversion".
+
+### Nota sobre la conversion de `FacturarRecargo()`
+
+La auditoria de esa cadena dejo dos defectos anotados, no corregidos aca: `DecToString()`
+escribe en un buffer estatico global (`rgch`), por lo que no es reentrante ni thread-safe,
+y `BDecimal::ToString()` lo copia recien en la linea siguiente; y el separador decimal se
+emite hardcodeado como `.` mientras que `Convert::ToDecimal(String^)` parsea con la
+cultura del sistema, lo que rompe si alguna caja se configura con cultura es-AR.
+
+---
+
 ## 2026-08-08 - QuickVentas: archivos de venta rapida agarrados en el server, arqueo de cajero flotante sin impresion
 
 ### Contexto / sintoma

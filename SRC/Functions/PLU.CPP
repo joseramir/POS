@@ -428,11 +428,19 @@ void FacturarRecargo(int tipo, BDecimal recargo)
 		return;
 	}
 	char *auxmonto = recargo.ToString();
-	Decimal auxdec = System::Convert::ToDecimal(gcnew System::String(auxmonto));	
-	
+	Decimal auxdec = System::Convert::ToDecimal(gcnew System::String(auxmonto));
+
 	long precuni = System::Convert::ToInt64(auxdec * 100);
 	double importe = ((double)precuni) / 100;
 	double cantidad = 1.0;
+
+	//   Diagnostico del recargo financiero que queda en $0.01: registra la cadena completa de
+	//   conversion BDecimal -> string -> Decimal -> precuni. 'ToString()' escribe en un buffer
+	//   estatico compartido (DecToString/rgch), asi que si el string sale distinto del valor
+	//   recibido, la corrupcion esta aca y no en el monto que llego desde el medio de pago.
+	WLog("RECAFIN.FACTURA - recibido=%.17lg ToString='%s' auxdec=%.4lf precuni=%ld importe=%.2lf",
+		recargo.ToDouble(), auxmonto, System::Convert::ToDouble(auxdec), precuni, importe);
+
 	xTotal.AddRecFinan(importe);
 
 	dplu.s_c_flag = 0;					// Indica que el codigo fue TECLEADO

@@ -1634,6 +1634,8 @@ void mpago_(int cual, TarjInfo *info)
 					if (posnet->m_monto >= 0.01 && montodescto > 0)
 						Dump::promosmp->SetConfirmaDescto(posnet->m_mpago, posnet->m_codtarjeta);
 				}
+				// Diagnostico del recargo $0.01: total por medio de pago antes de facturarlo.
+				WLog("RECAFIN.POSNET - Total a facturar=%.17lg (cupones=%d)", recaMedioPago, GCStatic::tjPosnet->Count);
 				FacturarRecargo(TIPORECA_FINANCIERO, recaMedioPago);
 				PrintTktTot(false);
 				
@@ -1641,15 +1643,39 @@ void mpago_(int cual, TarjInfo *info)
 				recaMedioPago = 0;
 				for each(TransVerifone ^posnet in Dump::TarjPrisma)
 				{
-					if (posnet->ImporteRecargo > 0)					
+					if (posnet->ImporteRecargo > 0)
 						recaMedioPago += Convert::ToDouble(posnet->ImporteRecargo);
+					// Diagnostico del recargo $0.01: valor de cada cupon al totalizar.
+					WLog("RECAFIN.PRISMA - Cupon: ImporteRecargo=%.2lf ImporteIngresado=%.2lf acum=%.2lf (lote=%d cupon=%d tarj=%d mpago=%d)",
+						Convert::ToDouble(posnet->ImporteRecargo), Convert::ToDouble(posnet->ImporteIngresado),
+						recaMedioPago, posnet->NroLote, posnet->NroCupon, posnet->AlbNroTarjeta, posnet->AlbNroMpago);
 					double montodescto = Dump::promosmp->GetMontoDescSinConfirmarDouble(posnet->AlbNroMpago, posnet->AlbNroTarjeta);
 					if (posnet->ImporteIngresado > 0 && montodescto > 0)
 						Dump::promosmp->SetConfirmaDescto(posnet->AlbNroMpago, posnet->AlbNroTarjeta);
 				}
+				WLog("RECAFIN.PRISMA - Total a facturar=%.17lg (cupones=%d)", recaMedioPago, Dump::TarjPrisma->Count);
 				FacturarRecargo(TIPORECA_FINANCIERO, recaMedioPago);
 				PrintTktTot(false);
 
+				//agregado para las tarjetas Prisma ECR
+				recaMedioPago = 0;
+				for each(TransPrismaECR ^posPrismaECR in Dump::TarjPrismaECR)
+				{
+					if (posPrismaECR->ImporteRecargo > 0)
+						recaMedioPago += Convert::ToDouble(posPrismaECR->ImporteRecargo);
+					// Diagnostico del recargo $0.01: valor de cada cupon ECR al totalizar.
+					WLog("RECAFIN.ECR - Cupon: ImporteRecargo=%.2lf ImporteIngresado=%.2lf acum=%.2lf (lote=%d cupon=%d tarj=%d mpago=%d)",
+						Convert::ToDouble(posPrismaECR->ImporteRecargo), Convert::ToDouble(posPrismaECR->ImporteIngresado),
+						recaMedioPago, posPrismaECR->NroLote, posPrismaECR->NroCupon, posPrismaECR->AlbNroTarjeta, posPrismaECR->AlbNroMpago);
+					double montodescto = Dump::promosmp->GetMontoDescSinConfirmarDouble(posPrismaECR->AlbNroMpago, posPrismaECR->AlbNroTarjeta);
+					if (posPrismaECR->ImporteIngresado > 0 && montodescto > 0)
+						Dump::promosmp->SetConfirmaDescto(posPrismaECR->AlbNroMpago, posPrismaECR->AlbNroTarjeta);
+				}
+				WLog("RECAFIN.ECR - Total a facturar=%.17lg (cupones=%d)", recaMedioPago, Dump::TarjPrismaECR->Count);
+				FacturarRecargo(TIPORECA_FINANCIERO, recaMedioPago);
+				PrintTktTot(false);
+
+				//Agregado para los recargo de Smartpoint de Mercado Pago
 				recaMedioPago = 0;
 				for each(TransSmartPointMp ^posnet in Dump::TarjSmartPointMp)
 				{
@@ -1659,9 +1685,11 @@ void mpago_(int cual, TarjInfo *info)
 					if (posnet->ImporteIngresado > 0 && montodescto > 0)
 						Dump::promosmp->SetConfirmaDescto(posnet->AlbNroMpago, posnet->AlbNroTarjeta);
 				}
+				// Diagnostico del recargo $0.01: total de SmartPoint antes de facturarlo.
+				WLog("RECAFIN.SMARTPOINT - Total a facturar=%.17lg (cupones=%d)", recaMedioPago, Dump::TarjSmartPointMp->Count);
 				FacturarRecargo(TIPORECA_FINANCIERO, recaMedioPago);
 				PrintTktTot(false);
-			}			
+			}
 
 			
 			// Primero, procesa las tarjetas online. Si falla, no procesa mas...
