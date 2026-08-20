@@ -5,6 +5,48 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-20 - Carga manual de cupon Prisma: letras en el numero de autorizacion
+
+### Contexto
+
+En las cajas de autocobro, la carga manual del cupon Prisma
+(`btnCargaManual` de `TarjOnlineTouch`, agregada el 2026-08-15) se completa desde
+`frmCuponManualPrisma`, que solo tiene el teclado touch heredado de `BaseDialog`: los
+digitos 0 a 9, sin letras. Pero el codigo de autorizacion que imprime el cupon fisico
+puede ser alfanumerico, asi que habia cupones que no se podian cargar.
+
+El teclado corto del `Buscador` (`Buscador.h`) ya resolvia lo mismo para la busqueda por
+descripcion: cada tecla lleva un `Tag` con sus caracteres (`ABC2`, `DEF3`, ...) y
+`CellButton_Click` va ciclando entre ellos mientras se toque la misma tecla, con un timer
+de un segundo que confirma la eleccion. Se adapto esa idea al campo de autorizacion.
+
+### Parche
+
+**`SRC/Forms/frmCuponManualPrisma.h`:**
+
+- `Boton_Click` pasa a tener dos caminos. Con el foco en Nro Lote o Nro Cupon el
+  comportamiento es el de siempre (numerico puro). Con el foco en Nro Autoriz entra la
+  logica multi-tap: el primer toque escribe el digito y cada toque siguiente de la misma
+  tecla, dentro de un segundo (`tmrMultiTap`), reemplaza ese caracter por la letra que
+  sigue. El orden es digito primero (`2ABC`, `3DEF`, ... `9WXYZ`), al reves que en el
+  Buscador, para que quien carga solo numeros no note ningun cambio.
+- El caracter tentativo se escribe directo en el campo (no en una preview aparte como el
+  Buscador) y `lblTeclas` muestra las opciones de la tecla en curso con la elegida entre
+  corchetes. `lblAyudaLetras` explica el mecanismo de forma permanente.
+- El ciclo se cierra -y el caracter queda confirmado- por timeout, al tocar otra tecla, al
+  cambiar de campo (`SetFocusTo` / `TbGotFocus`), con Borrar (`bBorra_Click`), con Enter
+  (`bEnter_Click`), con la flecha izquierda (`ProcessHotKey`), al aceptar y al cancelar.
+- `txtNroAutor` queda en `CharacterCasing::Upper` y con un `KeyPress` propio
+  (`txtAlfaNum_KeyPress`) que acepta A-Z y 0-9; antes no tenia ninguna validacion.
+  `TjOnline.cpp` ya hacia `ToUpper()->PadLeft(6, '0')` sobre este valor, asi que el largo
+  maximo de 6 y las mayusculas se mantienen.
+- `Boton_Click` ademas chequea que `tb` sea realmente un `TextBox` antes de usarlo (antes
+  hacia `dynamic_cast` y desreferenciaba el resultado sin control).
+
+Sin cambios en `TarjOnlineTouch.h`: el dialogo se sigue abriendo igual.
+
+---
+
 ## 2026-08-18 - PrismaECR: lista propia de cupones, recargo financiero propio, y trazas para el recargo que queda en $0.01
 
 ### Contexto
