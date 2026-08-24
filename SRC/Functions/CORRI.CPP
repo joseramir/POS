@@ -42,6 +42,11 @@ void DoCorriAll()
 			globalDelayPrint = 1;
 		}
 
+		// El ticket se esta anulando: descarta los vouchers que haya dejado apilados el
+		// replay de arriba (PrintMpag() apila el del medio de pago). Un ticket anulado no
+		// debe emitir un voucher firmable.
+		ResetVouchers();
+
 		pf->PrintSubtot("", 0);//agregado para impresion del subtotal
 		//STRCPY(tickAdic, "&4TKT CANCELADO");
 		sprintf(tickAdic, "&4TKT CANCELADO - %s", supervNom);

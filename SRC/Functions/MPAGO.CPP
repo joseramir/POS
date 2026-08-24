@@ -2117,8 +2117,9 @@ void mpago_(int cual, TarjInfo *info)
 
 	 if (cual == 34 && Dump::actCliente != nullptr)//mutual comodin
 	 {
-		 long mcticket = pf->GetTickNro(GlobalTF);
-		 VoucherVar("@TICKET@", mcticket);	
+		 // El numero de ticket NO se toma aca: con impresion diferida el comprobante
+		 // fiscal todavia no esta abierto y GetTickNro() devuelve el del comprobante
+		 // ANTERIOR. @TICKET@ se resuelve al apilar el voucher, en PrintMpag().
 		 VoucherVar("@IMPORTEMC@",importe);
 			 //StackVoucher(27);
 	 }
@@ -3217,11 +3218,19 @@ void PrintMpag(void *mpg_)
 				EnLetras(vlto, "@VUELTO@");						
 			}		
 		}	   
-		// Si corresponde, prepara la impresion del voucher
-		if(p->voucher != 0) 
+		// Si corresponde, prepara la impresion del voucher.
+		// OJO: con impresion diferida (prndelay) PrintMpag() corre DOS veces -- la pasada
+		// diferida y el replay de ReprintDump() -- y solo en el replay esta abierto el
+		// documento fiscal. Antes cada pasada apilaba una copia, y la primera congelaba en
+		// el voucher el numero del comprobante ANTERIOR. Ahora las dos copias se apilan en
+		// el replay, con el numero definitivo.
+		if(p->voucher != 0 && !(prndelay && globalDelayPrint))
 		{
+			if(mpg->nro == 34)									// Mutual Comodin
+				VoucherVar("@TICKET@", pf->GetTickNro(GlobalTF));
 			//WriteBootLog("AVISO - Stack voucher");
-			StackVoucher(p->voucher);
+			StackVoucher(p->voucher);							// Original
+			if(prndelay) StackVoucher(p->voucher);				// Duplicado
 		}
 
 		// Cierra la impresion.

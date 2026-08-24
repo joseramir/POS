@@ -5,6 +5,80 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-24 - Voucher de Mutual Comodin: imprimia el numero del ticket anterior
+
+### Contexto
+
+En una caja que recupera pedidos de e-commerce (impresion diferida, `prndelay = si`) se
+reporto que el voucher de Mutual Comodin y el voucher de e-commerce salian con numeros de
+ticket distintos, cuando deberian ser el mismo. Caso del 2026-08-17 14:26 (pedido 654519,
+cliente TORREZ VERONICA): el comprobante fiscal emitido fue el 844 (`@|82` y `E|0|`
+devuelven `00000844`, y el `DEop` de `trans.dbf` graba `TICKET=844`), el voucher de
+e-commerce imprimio `Nro. Ticket: 844` y los dos ejemplares del voucher de Mutual
+imprimieron `Nro Ticket: 843`.
+
+Las dos plantillas usan la misma variable `@TICKET@` (`mensajes.ini`, `[voucher6]` y
+`[voucher27]`), pero se escribia en dos momentos distintos:
+
+- `MPAGO.CPP`, `mpago_()`: `VoucherVar("@TICKET@", pf->GetTickNro(GlobalTF))` al cobrar.
+- `DUMP.CPP`, `WriteEOPFiscal()`: `VoucherVar("@TICKET@", ticket)` despues de `PrintClose()`.
+
+`StackVoucher()` (`VOUCHER.CPP`) no difiere la resolucion: llama a `ExpandVoucher()`, que
+reemplaza las variables y **congela** el texto; `PrintVouchers()` despues solo vuelca lineas
+ya expandidas. El voucher de Mutual se apila durante `PrintMpag()` y se quedaba con el valor
+viejo; el de e-commerce se apila en `WriteEOPFiscal()`, ya con el valor nuevo.
+
+El valor viejo estaba mal porque `GetTickNro()` manda `*|<TipoComprobante>` y devuelve el
+**ultimo comprobante emitido**: con impresion diferida el documento fiscal todavia no esta
+abierto cuando se cobra, asi que devuelve el anterior. Peor aun, cual sea el anterior depende
+de `pf->TipoComprobante` en ese instante, que recien queda definido al abrir el documento. En
+este caso dio 843 (serie Factura B) solo porque la seleccion del cliente ya habia puesto
+`pf->TipoComprobante = 82`; con el valor por defecto (83, tique) habria impreso 35484, de la
+otra serie.
+
+Ademas, con `prndelay` activo `PrintMpag()` corre **dos veces** para el mismo pago -- la
+pasada diferida (que el driver descarta) y el replay de `ReprintDump()` desde
+`WriteEOPFiscal()` -- y `StackVoucher()` no estaba gateado por `globalDelayPrint`. De ahi
+salen los dos ejemplares del voucher de Mutual, comportamiento que se quiere conservar.
+
+### Parche
+
+**`SRC/Functions/MPAGO.CPP`:**
+
+- `mpago_()`: se elimina la toma anticipada del numero de ticket para Mutual Comodin
+  (`long mcticket = pf->GetTickNro(GlobalTF)` + `VoucherVar("@TICKET@", mcticket)`). Queda
+  solo `@IMPORTEMC@`, que si depende del importe cobrado y esta disponible ahi.
+
+- `PrintMpag()`: el bloque que apila el voucher del medio de pago pasa a correr solo en la
+  pasada que tiene el documento fiscal abierto (`!(prndelay && globalDelayPrint)`), y para
+  el medio 34 (Mutual Comodin) refresca `@TICKET@` con `pf->GetTickNro(GlobalTF)` justo
+  antes de apilar. Para conservar los dos ejemplares que antes generaban las dos pasadas, en
+  modo diferido se apila el voucher dos veces (Original y Duplicado) desde el replay.
+
+**`SRC/Functions/CORRI.CPP`:**
+
+- `DoCorriAll()` (anulacion total del ticket) llama a `ResetVouchers()` despues de su propio
+  `ReprintDump()`, para descartar el voucher del medio de pago que ese replay deja apilado.
+  Un ticket anulado no debe emitir un voucher firmable. Descarta tambien cualquier otro
+  voucher pendiente de ese ticket (p. ej. cupones de promocion), que en un ticket anulado
+  tampoco corresponde emitir.
+
+Efecto: en cajas con `prndelay` siguen saliendo dos ejemplares y en cajas sin `prndelay`
+sigue saliendo uno, en ambos casos con el numero de comprobante definitivo.
+
+### Alcance y pendientes
+
+- No se toco `PrintNcMpag()` (notas de credito), que conserva el bloque original.
+- Los vouchers de Tipre (`[voucher...]` con `IDTRXTIPRE`) tambien usan `@TICKET@` y hoy lo
+  reciben de `WriteEOPFiscal()` del ticket **anterior**; `TarjOnlineTipre.h` repite ademas el
+  patron de leer `GetTickNro()` antes de tiempo. Mismo defecto latente, sin corregir.
+- Ticket anulado: no se emite el voucher. En `CancelOperacion()` (`MPAGO.CPP`) sale solo,
+  porque hace `TruncTrans()` y no hay replay que apile nada; antes lo apilaba la pasada
+  diferida y se imprimia igual. En `DoCorriAll()` (`CORRI.CPP`) hacia falta corregirlo
+  aparte, porque hace su propio `ReprintDump()`: ver el parche de ese archivo mas arriba.
+
+---
+
 ## 2026-08-20 - Carga manual de cupon Prisma: letras en el numero de autorizacion
 
 ### Contexto
