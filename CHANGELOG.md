@@ -5,6 +5,64 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-31 - SyncWorker: un ticket colgado bloqueaba la cola y se perdia en silencio
+
+### Contexto
+
+El `bin/LogAPIVentas.txt` del 2026-08-31 muestra el comprobante 121
+(`adf4c08c-b4ae-4d3c-b736-6ef22361adc8`) reintentandose una y otra vez con
+"Se excedio el tiempo de espera de la operacion". No es lentitud general del webapi: los dos
+tickets anteriores (10:03 y 10:04) sincronizaron en menos de un segundo. Los cuatro fallidos
+cortan a los 5,0 segundos exactos, que es el `request.Timeout = 5000` del propio POS.
+
+Ese timeout es **ambiguo**: la respuesta no volvio a tiempo, pero el webapi puede haber
+grabado el comprobante igual. Se confirmo en la base central, donde el ticket quedo insertado
+tres veces: como el endpoint no valida ni deduplica, cada reintento agrega otra copia. Es la
+causa #2 de duplicados que quedo abierta en la entrada del 2026-08-10.
+
+Del lado del POS, ademas, el fallo se amplificaba:
+
+- `ProcesarLote()` hacia `break` ante cualquier error transitorio, asi que un solo ticket
+  problematico frenaba a todos los que tenia detras (en el log: "procesando 2 ticket(s)" con
+  un unico resultado registrado).
+- Al llegar a `MAX_INTENTOS` el ticket pasaba a `ERROR_PERMANENTE` sin ningun aviso: la fila
+  queda en `ticketsync.db`, pero nadie consulta ese SQLite.
+- La rama de error permanente (4xx) llamaba a `MarcarError`, que deja la fila en `PENDIENTE`
+  hasta los diez intentos, de modo que se reintentaba igual pese al comentario que decia lo
+  contrario.
+
+### Parche
+
+**`LibEntidades/Alberdi/Syncworker.cs`:**
+
+- `EnviarAlEndpoint()` clasifica el fallo de transporte en `ClasificarErrorTransporte()`:
+  `SyncErrorConexionException` cuando no se llego a establecer la conexion (el servidor nunca
+  vio el ticket, reintentar es inofensivo) y `SyncErrorTimeoutException` cuando vencio el
+  timeout (ambiguo, puede haberse grabado igual).
+- Solo el error de conexion corta el lote. Un timeout o un 5xx registran el fallo y siguen con
+  el ticket siguiente, con un tope de `MAX_FALLOS_SEGUIDOS` (5) fallos consecutivos por ciclo.
+- El 4xx va derecho a `ERROR_PERMANENTE` con `MarcarErrorPermanente()`, sin gastar diez
+  intentos.
+- Todo ticket que deja de reintentarse queda anotado en `bin/TicketsNoSincronizados.txt` con
+  su payload completo, ademas del aviso en el log.
+- `TIMEOUT_MS` sube de 5000 a 15000 y se agrega `ReadWriteTimeout`, porque `Timeout` solo
+  cubre hasta la llegada de los headers (el 2026-08-12 un POST tardo 59 segundos con el
+  timeout puesto en 5). Achica la ventana del duplicado, no la elimina.
+
+**`LibEntidades/Alberdi/Ticketsyncrepository.cs`:**
+
+- `MarcarError()` ahora devuelve el estado en que quedo la fila, para que el worker sepa
+  cuando avisar. Se agrega `MarcarErrorPermanente()` y ambos comparten `ActualizarEstado()`.
+
+### Pendiente del lado del webapi
+
+La duplicacion solo se cierra del todo haciendo el endpoint idempotente por `Seq`: indice
+unico sobre esa columna y responder 200/409 si ya existe. El `Seq` ya viaja en el payload y es
+identico en todos los reintentos, porque se envia el JSON guardado en el buffer local. Queda a
+cargo del webapi.
+
+---
+
 ## 2026-08-24 - Voucher de Mutual Comodin: imprimia el numero del ticket anterior
 
 ### Contexto

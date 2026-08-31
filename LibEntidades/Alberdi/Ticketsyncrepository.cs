@@ -214,12 +214,34 @@ namespace LibEntidades.Alberdi
         /// Si se supera MAX_INTENTOS pasa a ERROR_PERMANENTE
         /// (requiere revisión manual / alerta).
         /// </summary>
-        public void MarcarError(long id, int intentos, string detalle)
+        /// <returns>
+        /// El estado en que quedó la fila: ESTADO_PENDIENTE si todavía se va a
+        /// reintentar, o ESTADO_ERROR_PERMANENTE si agotó los intentos. El
+        /// llamador lo usa para avisar cuando el ticket deja de reintentarse.
+        /// </returns>
+        public string MarcarError(long id, int intentos, string detalle)
         {
             string nuevoEstado = intentos >= MAX_INTENTOS
                 ? ESTADO_ERROR_PERMANENTE
                 : ESTADO_PENDIENTE;
 
+            ActualizarEstado(id, nuevoEstado, intentos, detalle);
+            return nuevoEstado;
+        }
+
+        /// <summary>
+        /// Marca el ticket como ERROR_PERMANENTE sin esperar a MAX_INTENTOS.
+        /// Para cuando ya se sabe que reintentar no sirve, típicamente un 4xx
+        /// del endpoint: el servidor rechazó el dato y va a rechazarlo igual
+        /// las próximas nueve veces.
+        /// </summary>
+        public void MarcarErrorPermanente(long id, int intentos, string detalle)
+        {
+            ActualizarEstado(id, ESTADO_ERROR_PERMANENTE, intentos, detalle);
+        }
+
+        private void ActualizarEstado(long id, string estado, int intentos, string detalle)
+        {
             const string sql = @"
                 UPDATE ticket_sync SET
                     estado         = @estado,
@@ -231,7 +253,7 @@ namespace LibEntidades.Alberdi
             using (SQLiteConnection conn = AbrirConexion())
             using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
             {
-                cmd.Parameters.AddWithValue("@estado",   nuevoEstado);
+                cmd.Parameters.AddWithValue("@estado",   estado);
                 cmd.Parameters.AddWithValue("@intentos", intentos);
                 cmd.Parameters.AddWithValue("@ahora",    DateTime.Now.ToString("o"));
                 cmd.Parameters.AddWithValue("@error",    detalle ?? "");
