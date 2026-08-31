@@ -362,12 +362,16 @@ void CalcularPromosAntesMP()
 			actMarcaCli = 0;
 			if(!promo->HasRuntimeErrors())
 			{
+				// Excluye al cliente por reparticion (exclucli del promo.ini; en
+				// principio 9 = empleados, puede venir otro valor). Vale para TODA
+				// promo, tenga o no marcacli: antes este chequeo vivia adentro del
+				// if(MarcaCli > 0), asi que una promo sin marcacli -el caso tipico
+				// de los vouchers- se aplicaba igual al cliente excluido.
+				if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
+					continue;
 				if (promo->MarcaCli > 0){
 					actMarcaCli = promo->MarcaCli;
 					if (ClienteBenef > 1){
-						//para excluir los clientes, en principio exclucli = 9 empleados puede venir otro valor
-						if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
-							continue;
 						if (promo->MarcaCli == ClienteBenef){
 							promo->Evaluate();
 							promo->ApplyAction();
@@ -433,12 +437,14 @@ void AplicarPromociones()
 			gNumTarjeta = promo->NumTarjeta;
 			if(!promo->HasRuntimeErrors())
 			{
+				// Misma exclusion que en CalcularPromosAntesMP, y tiene que estar en
+				// los dos: si se excluyera solo aca, el total simulado antes de los
+				// medios de pago mostraria un descuento que despues no se aplica.
+				if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
+					continue;
 				if (promo->MarcaCli > 0){
 					actMarcaCli = promo->MarcaCli;
 					if (ClienteBenef > 1){
-						//para excluir los clientes, en principio exclucli = 9 empleados puede venir otro valor
-						if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
-							continue;
 						if (promo->MarcaCli == ClienteBenef){
 							pluAdicText = promo->Descrip;
 							promo->ApplyAction();
@@ -718,6 +724,11 @@ void ApliPromoCobra()
 			{
 				if (promo->CodMP > 0 || promo->MarcaCli > 0)
 					continue;
+				// La exclusion por reparticion tambien vale en caja cobradora. Este
+				// bucle solo corre promos con MarcaCli == 0, que son justamente las
+				// que antes nunca llegaban a mirar ExcluCli.
+				if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
+					continue;
 				if(!promo->HasRuntimeErrors())
 				{
 					promo->Evaluate();
@@ -749,6 +760,9 @@ void ApliPromoCobra()
 			if(PromoTotalmenteAplicada(promo))
 				continue;
 			if (promo->CodMP > 0 || promo->MarcaCli > 0)
+				continue;
+			// Idem el bucle de simulacion de mas arriba.
+			if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
 				continue;
 
 			gNumMedioPago = promo->CodMP;			
@@ -985,6 +999,12 @@ PromoDef::PromoDef(int promoNum)
 	filterResult = NULL;			// ApplyAction() lo dereferencia: sin esto queda indeterminado.
 	accionesSaldoCajaMask = 0;
 	CodMP = 0;
+	// ReloadPromos() los asigna siempre desde el .ini, pero CargaPromosExtra()
+	// (promos "fiel") no toca ExcluCli y solo asigna MarcaCli si viene > 0, asi
+	// que quedaban con basura. Ahora que ExcluCli se consulta en TODA promo, esa
+	// basura saltearia promos al azar.
+	MarcaCli = 0;
+	ExcluCli = 0;
 }
 
 PromoDef::~PromoDef()

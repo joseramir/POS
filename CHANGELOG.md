@@ -5,6 +5,70 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-08-31 - Promos: exclucli no se aplicaba salvo que la promo tuviera marcacli
+
+### Contexto
+
+El usuario reporto que las promos de voucher con `exclucli = 9` en el `promo.ini` se imprimen
+igual cuando el cliente es de reparticion 9. `ClienteBenef` es la reparticion del cliente
+(`MPAGO.CPP:749`, `ClienteBenef = Dump::actCliente->Repa`).
+
+`ExcluCli` se consultaba en solo dos lugares de todo el codigo, y los dos estaban anidados
+adentro de `if (promo->MarcaCli > 0)`:
+
+```cpp
+if (promo->MarcaCli > 0){
+    actMarcaCli = promo->MarcaCli;
+    if (ClienteBenef > 1){
+        if (promo->ExcluCli > 0 && promo->ExcluCli == ClienteBenef)
+            continue;                  // unico lugar donde exclucli hacia algo
+        ...
+    }
+}
+else
+{
+    promo->Evaluate();
+    promo->ApplyAction();              // se aplicaba sin mirar ExcluCli
+}
+```
+
+Una promo sin `marcacli` -el caso tipico de los vouchers- deja `pd->MarcaCli` en 0
+(`atoi("")`), toma la rama `else` y ejecuta la accion directo: la exclusion nunca se leia. Era
+codigo muerto para esa promo.
+
+`ApliPromoCobra()` era todavia peor: no mencionaba `ExcluCli` en ningun lado, y ademas descarta
+las promos con `MarcaCli > 0`, con lo cual solo corria las que jamas chequeaban la exclusion.
+
+### Parche
+
+**`SRC/Functions/PROMOS.cpp`:**
+
+- `CalcularPromosAntesMP()` y `AplicarPromociones()`: el chequeo de `ExcluCli` sale de adentro
+  del `if (MarcaCli > 0)` y pasa a evaluarse para toda promo, apenas se descarta que tenga
+  errores de runtime. Tiene que estar en las dos funciones: si se excluyera solo en la de
+  aplicacion, el total simulado antes de los medios de pago mostraria un descuento que despues
+  no se aplica.
+- `ApliPromoCobra()`: se agrega el mismo chequeo en sus dos bucles (simulacion y aplicacion),
+  donde antes no existia.
+- `PromoDef::PromoDef()`: se inicializan `MarcaCli` y `ExcluCli` en 0. `ReloadPromos()` siempre
+  los asigna desde el `.ini`, pero `CargaPromosExtra()` (promos "fiel") no toca `ExcluCli` y
+  solo asigna `MarcaCli` si viene > 0, asi que quedaban con basura de memoria. Con el chequeo
+  viejo esa basura casi no molestaba; ahora que `ExcluCli` se consulta en TODA promo, saltearia
+  promos al azar.
+
+### Pendiente, detectado en el mismo analisis
+
+- `AplicarPromociones()` no resetea `actMarcaCli` en cada vuelta del bucle, cosa que
+  `CalcularPromosAntesMP()` si hace (`actMarcaCli = 0;`). Una promo sin `marcacli` que corra
+  despues de una con `marcacli` hereda el valor de la anterior y se lo lleva a `Plugin.cpp:800`.
+- `CargaPromosExtra()` tampoco asigna `Descrip`, `CodPlu` ni `NumTarjeta`, que siguen sin
+  inicializar en el constructor. `Descrip` es el mas riesgoso: se usa como `pluAdicText`.
+- Queda evaluado (no implementado) el soporte de listas separadas por coma en `marcacli` y
+  `exclucli`. Ojo: hoy `atoi("2,8")` devuelve 2 en silencio, asi que un `.ini` con listas no
+  debe desplegarse antes que el ejecutable que las entienda.
+
+---
+
 ## 2026-08-31 - SyncWorker: un ticket colgado bloqueaba la cola y se perdia en silencio
 
 ### Contexto
