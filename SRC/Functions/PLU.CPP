@@ -1293,6 +1293,13 @@ void ProcPlu(void *p_, int fwrite)
 	signo = (x < 0.0 || y < 0.0)? -1.0: 1.0;
 	if (p->ppuntual > 0)
 		NumPedEcommerce = p->ppuntual;
+
+	//   'precpuntual' sale del campo 'seq' del mplu (ver mas arriba, en la carga del articulo) y
+	//   marca que el precio vino puntualizado por sistema. Sobre ese precio no se promociona.
+	//   La marca se pone aca -y no al fichar- para que tambien se reconstruya al reprocesar el
+	//   dump tras un reinicio, que es cuando se recalculan las promos.
+	if (!p->anulado && p->precpuntual > 0)
+		ticketPrecPuntual = true;
 	CalcIvaSap(p);
 
 	if (!p->anulado)
@@ -1341,6 +1348,7 @@ void ProcPlu(void *p_, int fwrite)
 		unplu->Impiva = gcnew System::String(p->impiva);
 		unplu->Precmay = gcnew System::String(p->precmay);
 		unplu->Ppuntual = p->ppuntual;
+		unplu->PrecPuntual = (unsigned int) p->precpuntual;
 		unplu->Umillas = p->umillas;
 		unplu->Towrite = true;
 		Dump::sqltrans->Add(unplu);

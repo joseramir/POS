@@ -119,6 +119,7 @@ void AplicaPromoJanis();
 
 // Variables globales.
 extern bool promosCalc;			// Indica que las promos ya se calcularon.
+extern bool ticketPrecPuntual;	// El ticket lleva articulos con precio puntualizado: las promos no corren.
 extern bool forceReloadPromos;	// Indica que se deben recargar las promociones antes de usarlas.
 extern bool reloadPremioInst;  // Para indicar que se recibio una nueva planificacion de premios
 

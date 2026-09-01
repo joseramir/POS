@@ -97,6 +97,7 @@ dbf canastas;					// Base con la definicion de las canastas disponibles.
 bool globalPromos;				// Activacion o desactivacion global de este subsitema.
 bool soloSimular;				// Se usa para evaluar las acciones pero no ejecutarlas.
 bool promosHechas;				// Evita que, por errores internos, las promos se apliquen mas de una vez en el mismo ticket.
+bool ticketPrecPuntual = false;	// El ticket tiene algun articulo con precio puntualizado (seq del mplu): sin promociones.
 static char *si = "Si";
 static char *no = "No";
 
@@ -338,7 +339,11 @@ void CalcularPromosAntesMP()
 	seisSinInteres = 0;
 	/*double tkpiibb = xTotal.VerRecargo(10002).ToDouble();
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));*/
-	if(globalPromos && !promosCalc)
+	//   Un articulo con precio puntualizado (campo 'seq' del mplu, ver ProcPlu) ya viene con un
+	//   precio negociado por sistema: encima no corresponde promocionar. Como el motor evalua
+	//   los acumuladores del ticket completo y no renglon por renglon, la marca apaga las
+	//   promociones de toda la venta.
+	if(globalPromos && !promosCalc && !ticketPrecPuntual)
 	{
 		double tkpiibb = xTotal.VerRecargo(10002).ToDouble();
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
@@ -416,7 +421,8 @@ void CalcularPromoJanisAntesMP(){
 //  Aplica todas las promociones.
 void AplicarPromociones()
 {
-	if(globalPromos && !promosAplicadas && !promosHechas)
+	//   Idem la nota de CalcularPromosAntesMP: con precio puntualizado no se promociona.
+	if(globalPromos && !promosAplicadas && !promosHechas && !ticketPrecPuntual)
 	{
 		// Se asegura que, al aplicar las acciones, estas se ejecuten.
 		soloSimular = false;
@@ -702,7 +708,8 @@ void ApliPromoCobra()
 {
 	xTotal.ClearDescuento();
 	promosCalc = false;
-	if(globalPromos && !promosCalc)
+	//   Idem la nota de CalcularPromosAntesMP: con precio puntualizado no se promociona.
+	if(globalPromos && !promosCalc && !ticketPrecPuntual)
 	{
 		double tkpiibb = xTotal.VerRecargo(10002).ToDouble();
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
@@ -746,7 +753,7 @@ void ApliPromoCobra()
 	FactuPercepTissh(0, false);
 	FactuPercepIva(0, false);
 
-	if(globalPromos && !promosAplicadas) //&& !promosHechas)
+	if(globalPromos && !promosAplicadas && !ticketPrecPuntual) //&& !promosHechas)
 	{
 		// Se asegura que, al aplicar las acciones, estas se ejecuten.		
 		soloSimular = false;

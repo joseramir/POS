@@ -5,6 +5,63 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-01 - Precios puntualizados: el ticket no aplica promociones
+
+### Contexto
+
+El `mplu.dbf` puede traer un campo **`seq`** con el numero de pedido con el que el sistema envio
+un **precio puntualizado** para el articulo. `PLU.CPP` ya lo lee al fichar y lo guarda en
+`dplu.precpuntual` (`PLU.CPP:919`, no confundir con `ppuntual`, que es el pedido de Ecommerce /
+PedidosYa). Hasta ahora el campo se usaba para una sola cosa: renombrar el PLU 99029 a
+"Gaseosa x 3 Lts" en la impresion (`PLU.CPP:1489` y `:1560`).
+
+Un precio puntualizado ya viene negociado por sistema, asi que encima no corresponde
+promocionarlo.
+
+### Cambios
+
+**1. Marca del ticket** (`PROMOS.cpp`, `promo.h`, `PLU.CPP`, `DUMP.CPP`)
+
+Global nueva `ticketPrecPuntual`. La pone **`ProcPlu()`** (`PLU.CPP:1294`), al lado del
+`if (p->ppuntual > 0)` que ya estaba ahi, cuando el renglon no esta anulado y trae
+`precpuntual > 0`. Se pone en `ProcPlu` y no al fichar para que **tambien se reconstruya al
+reprocesar el dump** tras un reinicio, que es justo cuando se recalculan las promos. La limpia
+`ResetPOSAcumInternal` (`DUMP.CPP`), junto a `CCTicketComun`; no hace falta persistirla en CMOS
+porque sale del `trans.dbf`.
+
+El dato **ya se persistia**: el walk posicional de `DDplu_` contra la tabla `xxDDplu`
+(`FUNCS.H:685`) da exacto -- 29 campos -- y `precpuntual` cae en la columna **`TICKET`** del DBF.
+No hubo que agregar campo ni tocar el esquema (a diferencia de `tipoCompElegido` en el HU03).
+
+**2. Apagado de las promociones** (`PROMOS.cpp`)
+
+`ticketPrecPuntual` se suma al gate de las cuatro funciones: `CalcularPromosAntesMP()`,
+`AplicarPromociones()` y los dos bucles de `ApliPromoCobra()` (simulacion y aplicacion). Tiene que
+estar en las cuatro: si se apagara solo en la de aplicacion, el total simulado antes de los medios
+de pago mostraria un descuento que despues no se hace.
+
+**Apaga las promociones de la venta entera**, no solo las del renglon con precio puntual: el motor
+evalua expresiones sobre los acumuladores del ticket completo (`PromoDef::Evaluate`) y no tiene
+nocion de "este renglon no participa".
+
+**3. Caja cobradora** (`TransSql/DbTrans.cs`, `PLU.CPP`)
+
+`InsertPlu` mandaba **`@ticket` en cero fijo**, con lo cual el precio puntualizado se perdia en el
+viaje a SQL y la cobradora volvia a aplicar las promociones que el POS habia apagado. Ahora manda
+`item.PrecPuntual` y `GetItem` lo lee de vuelta. La propiedad `MDPlu.PrecPuntual` ya existia en
+`ParaTrans.cs` pero **no la cargaba nadie**: se completa en el bloque `FACTSQL` de `ProcPlu`
+(`unplu->PrecPuntual`), al lado de `Ppuntual`. Mismo defecto que se corrigio para el `DMpag` 9999
+en la entrada del 2026-08-26.
+
+### A tener en cuenta al probar
+
+El `mplu.dbf` de `bin/pos` (15.267 articulos, del 25/08) **no tiene la columna `SEQ`**: sus 41
+campos no la incluyen. `dbf::Get` con un campo inexistente devuelve la cadena vacia
+(`DB.CPP:675`), asi que `precpuntual` queda en 0 y el gate no dispara nunca. El cambio es inocuo
+con la base actual, pero **para probarlo hace falta un mplu que traiga el campo**.
+
+---
+
 ## 2026-08-31 - Promos: exclucli no se aplicaba salvo que la promo tuviera marcacli
 
 ### Contexto

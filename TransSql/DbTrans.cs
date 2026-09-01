@@ -108,6 +108,8 @@ namespace TransSql
             item.Impiva = dr["impiva"].ToString();
             item.Precmay = dr["fecha_c"].ToString();
             item.Ppuntual = Convert.ToUInt32(dr["fecha_z"]);
+            // Precio puntualizado (campo 'seq' del mplu). Viaja en la columna 'ticket'.
+            item.PrecPuntual = dr.IsNull("ticket") ? 0 : Convert.ToUInt32(dr["ticket"]);
             item.Umillas = Convert.ToInt16(dr["modo"]);
             item.Caja = Convert.ToInt16(dr["caja"]);
             item.Tienda = dr["tienda"].ToString();
@@ -355,7 +357,9 @@ namespace TransSql
                 cmd.Parameters.AddWithValue("@condiva", string.Empty);
                 cmd.Parameters.AddWithValue("@local", string.Empty);
                 cmd.Parameters.AddWithValue("@tipo", 0);
-                cmd.Parameters.AddWithValue("@ticket", 0);
+                // Precio puntualizado: iba en cero fijo, con lo cual la caja cobradora no se
+                // enteraba y volvia a aplicar las promociones que el POS habia apagado.
+                cmd.Parameters.AddWithValue("@ticket", (decimal) item.PrecPuntual);
                 cmd.Parameters.AddWithValue("@zeta", 0);
                 cmd.Parameters.AddWithValue("@fecha_z", (decimal) item.Ppuntual);
                 cmd.Parameters.AddWithValue("@modo", (decimal) item.Umillas);

@@ -2769,6 +2769,9 @@ void ResetPOSAcumInternal()
 	supervNotaCredito[0] = 0;
 	Dump::docActual = nullptr;
 
+	//la marca de precio puntualizado: la vuelve a poner ProcPlu con los articulos del ticket
+	ticketPrecPuntual = false;
+
 }
 
 //   Resetea las variables internas del POS.
