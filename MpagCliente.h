@@ -45,6 +45,7 @@ namespace pos {
 
 	private: System::Windows::Forms::Label^  lblMessagePercep;
 	private: System::Windows::Forms::Label^  lblReparticion;
+	private: System::Windows::Forms::CheckBox^  chkTicketComun;
 	private: System::Windows::Forms::TextBox^  tbSaldo;
 	private: System::Windows::Forms::Label^  label15;
 	private: System::Windows::Forms::Label^  label16;
@@ -64,6 +65,9 @@ namespace pos {
 			validatedCod = String::Empty;
 			lblMessagePercep->Visible = false;
 			lblReparticion->Text = "";
+			chkTicketComun->Visible = false;
+			chkTicketComun->Checked = false;
+			CCTicketComun = false;
 
 			// Elimina los botones en configuraciones sin touchscreen
 			if(!usaTouch)
@@ -116,6 +120,13 @@ namespace pos {
 			/*case Keys::B:
 				this->chkBienUso->Checked = !this->chkBienUso->Checked;
 				break;*/
+
+			//   Solo tiene efecto con un cliente mayorista ya seleccionado: es el unico
+			//   caso en que el check esta visible.
+			case Keys::X:
+				if(this->chkTicketComun->Visible)
+					this->chkTicketComun->Checked = !this->chkTicketComun->Checked;
+				break;
 
 			case Keys::Enter:
 				this->bEnter_Click(nullptr, nullptr);
@@ -201,6 +212,7 @@ namespace pos {
 			this->tbSaldo = (gcnew System::Windows::Forms::TextBox());
 			this->label15 = (gcnew System::Windows::Forms::Label());
 			this->lblReparticion = (gcnew System::Windows::Forms::Label());
+			this->chkTicketComun = (gcnew System::Windows::Forms::CheckBox());
 			this->lblMessagePercep = (gcnew System::Windows::Forms::Label());
 			this->tbAlicuota = (gcnew System::Windows::Forms::TextBox());
 			this->label14 = (gcnew System::Windows::Forms::Label());
@@ -281,6 +293,7 @@ namespace pos {
 			this->panel1->Controls->Add(this->tbSaldo);
 			this->panel1->Controls->Add(this->label15);
 			this->panel1->Controls->Add(this->lblReparticion);
+			this->panel1->Controls->Add(this->chkTicketComun);
 			this->panel1->Controls->Add(this->lblMessagePercep);
 			this->panel1->Controls->Add(this->tbAlicuota);
 			this->panel1->Controls->Add(this->label14);
@@ -348,9 +361,23 @@ namespace pos {
 			this->lblReparticion->Size = System::Drawing::Size(54, 16);
 			this->lblReparticion->TabIndex = 38;
 			this->lblReparticion->Text = L"label15";
-			// 
+			//
+			// chkTicketComun
+			//
+			this->chkTicketComun->AutoSize = true;
+			this->chkTicketComun->Font = (gcnew System::Drawing::Font(L"Tahoma", 9.75F, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point,
+				static_cast<System::Byte>(0)));
+			this->chkTicketComun->ForeColor = System::Drawing::Color::Blue;
+			this->chkTicketComun->Location = System::Drawing::Point(290, 266);
+			this->chkTicketComun->Name = L"chkTicketComun";
+			this->chkTicketComun->Size = System::Drawing::Size(138, 20);
+			this->chkTicketComun->TabIndex = 40;
+			this->chkTicketComun->Text = L"Ticket comun (X)";
+			this->chkTicketComun->UseVisualStyleBackColor = true;
+			this->chkTicketComun->Visible = false;
+			//
 			// lblMessagePercep
-			// 
+			//
 			this->lblMessagePercep->AutoSize = true;
 			this->lblMessagePercep->Font = (gcnew System::Drawing::Font(L"Tahoma", 12, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
@@ -828,6 +855,14 @@ namespace pos {
 					
 					this->lblReparticion->Text = CuentaCorriente::RepaDes;
 
+					//   Solo el cliente mayorista puede pedir ticket comun en lugar del
+					//   ticket factura que sale automaticamente por su condicion ante el IVA.
+					//   Con el ticket ya empezado el comprobante esta abierto y la eleccion no
+					//   tendria efecto, asi que ni se ofrece.
+					this->chkTicketComun->Checked = false;
+					this->chkTicketComun->Visible = (!inOper && Dump::actCliente != nullptr &&
+													 Dump::actCliente->Repa == REPA_MAYORISTA);
+
 					if (Dump::actCliente != nullptr && !Dump::actCliente->UsadoMutual && Dump::actCliente->SaldoMutual > 0)
 					{
 						lblSaldoMut->Visible = true;
@@ -878,7 +913,9 @@ namespace pos {
 				else
 				{
 					this->btOk->Enabled = false;
-					this->lblMessagePercep->Visible = false;					
+					this->lblMessagePercep->Visible = false;
+					this->chkTicketComun->Visible = false;
+					this->chkTicketComun->Checked = false;
 				}
 			}
 			else			
@@ -915,9 +952,12 @@ namespace pos {
 
 		System::Void virtual btOk_Click(Object ^sender, EventArgs ^e) override
 		{
-			if(tb->Text->Trim() != validatedCod) 
+			if(tb->Text->Trim() != validatedCod)
 				return;
-			
+
+			//   Queda en la global para que ForceCC() lo asiente en el registro del cliente.
+			CCTicketComun = (this->chkTicketComun->Visible && this->chkTicketComun->Checked);
+
 			BaseDialog::btOk_Click(sender, e);
 
 			if (validatedCod->Trim() == String::Empty)
@@ -928,7 +968,8 @@ namespace pos {
 		{
 			STRCPY(c_condiva, "");
 			ClienteBenef = 0;
-			BaseDialog::Cancel_Click(sender, e);			
+			CCTicketComun = false;
+			BaseDialog::Cancel_Click(sender, e);
 		}
 
 		System::Void MpagCliente_FormClosed(System::Object^  sender, System::Windows::Forms::FormClosedEventArgs^  e) 

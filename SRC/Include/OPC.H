@@ -236,6 +236,12 @@ extern bool janisEcom;
 //Cliente Marcado;
 extern int ClienteBenef;
 
+//El cajero eligio ticket comun para un cliente de reparticion mayorista;
+extern bool CCTicketComun;
+
+//Reparticion que identifica al cliente mayorista, unica habilitada a elegir ticket comun.
+#define REPA_MAYORISTA	17
+
 //para importes de Janis
 extern char xsPrecEcom[30];
 

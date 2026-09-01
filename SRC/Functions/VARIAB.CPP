@@ -210,6 +210,9 @@ bool janisEcom;
 //Cliente Marcado;
 int ClienteBenef;
 
+//El cajero eligio ticket comun para un cliente de reparticion mayorista;
+bool CCTicketComun;
+
 //para importes de Janis
 char xsPrecEcom[30];
 

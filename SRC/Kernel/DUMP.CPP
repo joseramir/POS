@@ -2772,6 +2772,9 @@ void ResetPOSAcumInternal()
 	//la marca de precio puntualizado: la vuelve a poner ProcPlu con los articulos del ticket
 	ticketPrecPuntual = false;
 
+	//la eleccion de ticket comun vale para una sola venta
+	CCTicketComun = false;
+
 }
 
 //   Resetea las variables internas del POS.

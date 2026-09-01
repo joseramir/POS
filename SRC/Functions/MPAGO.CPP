@@ -665,6 +665,28 @@ bool TotalExtendido(::ArrayList *datos)
 }
 
 
+//   Carga en el comprobante que se envia al webapi la condicion ante el IVA que quedo en
+//   'c_condiva'. Hasta ahora nadie la seteaba, con lo cual TODOS los comprobantes viajaban
+//   con el default del constructor de HeaderDoc (Consumidor Final), incluso los ticket
+//   factura A de un Responsable Inscripto.
+void SetTipoIvaDoc()
+{
+	if(Dump::docActual == nullptr) return;
+
+	int id = 1;
+	char *des = "Consumidor Final";
+
+	if(!_stricmp(c_condiva, "RI"))      { id = 2; des = "Responsable Inscripto"; }
+	else if(!_stricmp(c_condiva, "NI")) { id = 3; des = "No Inscripto"; }
+	else if(!_stricmp(c_condiva, "MO")) { id = 4; des = "Monotributo"; }
+	else if(!_stricmp(c_condiva, "EX")) { id = 5; des = "Exento"; }
+	else if(!_stricmp(c_condiva, "NR")) { id = 6; des = "No Responsable"; }
+
+	Dump::docActual->mTipoIva->IdCondIva = id;
+	Dump::docActual->mTipoIva->CondIva = gcnew String(id == 1? "CF": c_condiva);
+	Dump::docActual->mTipoIva->Descripcion = gcnew String(des);
+}
+
 //   Lee los archivos de datos de cuenta corriente y los carga en las variables internas
 void LeeCCDatos()
 {
@@ -785,6 +807,7 @@ void LeeCCDatos()
 	Dump::docActual->mReparticion->Descripcion = Dump::actCliente->RepaDes;
 	Dump::docActual->mReparticion->ReparticionID = Dump::actCliente->Repa;
 	Dump::docActual->FechaHora = System::DateTime::Now;
+	SetTipoIvaDoc();
 
 	Dump::docActual->Caja = caja;
 	Dump::docActual->Cajero = ckaNro;
@@ -1249,6 +1272,11 @@ int ForceCC(int canAbort)
 	
 	mpag.codpostal = atoi(c_codpostal);
 	mpag.reparticion = ClienteBenef;
+
+	//   Si el cajero eligio ticket comun para el cliente mayorista, lo deja asentado en el
+	//   propio registro del cliente: es el unico que llega a SAP y a la caja cobradora, y
+	//   es lo que hace que la eleccion sobreviva al reproceso del dump.
+	mpag.tipoCompElegido = (CCTicketComun && ClienteBenef == REPA_MAYORISTA)? 83: 0;
 
 	ProcCCOnln(&onln, 1);
 
@@ -2832,8 +2860,13 @@ void ProcMpag(void *mpg_, int fwrite)
 			 unpago->Alipercep = mpg->alipercep;
 			 unpago->Escredito = mpg->escredito;
 			 unpago->Esposnet = mpg->esposnet;
+			 //   Datos del cliente que hasta ahora se perdian en el viaje a la caja cobradora:
+			 //   InsertMPago los mandaba a SQL con cero fijo.
+			 unpago->Reparticion = mpg->reparticion;
+			 unpago->CodPostal = mpg->codpostal;
+			 unpago->TipoCompElegido = mpg->tipoCompElegido;
 			 unpago->CnlVta = gcnew System::String(sapcnlvta);
-			 unpago->Towrite = true;			 
+			 unpago->Towrite = true;
 			 Dump::sqltrans->Add(unpago);
 		 }
 #endif
@@ -2858,8 +2891,20 @@ void ProcMpag(void *mpg_, int fwrite)
 
 			GlobalCCSelected = 1;
 			mpg->uOnline = 0;
+			ClienteBenef = mpg->reparticion;
 
-			if(!_stricmp(c_condiva, "RI") || !_stricmp(c_condiva, "NI")){
+			//   El comprobante lo decide la condicion ante el IVA, SALVO que el cajero haya
+			//   elegido ticket comun para el cliente mayorista. Esa eleccion viaja en el propio
+			//   registro, asi que vale igual en vivo, al reprocesar el dump y en la cobradora.
+			//   El interruptor real es GlobalTF: PrintEncab() arranca en 83 y solo pasa a
+			//   factura si GlobalTF != 0 (por eso tambien quedan afuera las percepciones y los
+			//   datos de razon social / domicilio, que es justo lo que se pide).
+			CCTicketComun = (mpg->tipoCompElegido == 83);
+			if(CCTicketComun){
+				pf->TipoComprobante = 83;
+				GlobalTF = 0;
+			}
+			else if(!_stricmp(c_condiva, "RI") || !_stricmp(c_condiva, "NI")){
 				pf->TipoComprobante = 81;
 				GlobalTF = 1;
 			}
@@ -2870,11 +2915,16 @@ void ProcMpag(void *mpg_, int fwrite)
 
 			if (Dump::docActual == nullptr)
 				Dump::docActual = gcnew LibEntidades::Alberdi::HeaderDoc();
-			Dump::docActual->CodCli = System::Convert::ToString(Dump::actCliente->Cod);
-			Dump::docActual->Nombre = Dump::actCliente->Nombre;
-			Dump::docActual->Direccion = Dump::actCliente->Direccion;
-			Dump::docActual->mReparticion->Descripcion = Dump::actCliente->RepaDes;
-			Dump::docActual->mReparticion->ReparticionID = Dump::actCliente->Repa;
+			//   Los datos salen del registro y no de 'Dump::actCliente', que solo existe cuando
+			//   el cliente se busco en SQL en esta misma corrida: al reprocesar el dump y en la
+			//   caja cobradora es nullptr y esto reventaba con NullReferenceException.
+			Dump::docActual->CodCli = (gcnew String(mpg->cc))->Trim();
+			Dump::docActual->Nombre = (gcnew String(mpg->nombre))->Trim();
+			Dump::docActual->Direccion = (gcnew String(mpg->direc))->Trim();
+			Dump::docActual->mReparticion->ReparticionID = mpg->reparticion;
+			if (Dump::actCliente != nullptr)
+				Dump::docActual->mReparticion->Descripcion = Dump::actCliente->RepaDes;
+			SetTipoIvaDoc();
 
 			Dump::docActual->Caja = caja;
 			Dump::docActual->Cajero = ckaNro;

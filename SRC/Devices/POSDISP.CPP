@@ -211,7 +211,10 @@ void PrintTktTot(bool refreshGrid)
 	if(ctaCod != 0 && (globalCCOnline || globalCobraCC || GlobalCCSelected))
 	{
 		sprintf(msgCC, "C/C [%c]: %lld-%s",
-			(_stricmp(c_condiva, "RI") == 0)? 'A': 'B',
+			//   Con el ticket comun del mayorista no corresponde letra de factura: GlobalTF
+			//   esta en cero y se emite un 83. La condicion ante el IVA solo decide la letra
+			//   cuando realmente hay ticket factura.
+			CCTicketComun? 'T': ((_stricmp(c_condiva, "RI") == 0)? 'A': 'B'),
 			_atoi64(c_cod), 
 			c_nombre);
 		if(!globalCobraCC)
@@ -229,7 +232,7 @@ void PrintTktTot(bool refreshGrid)
 		wLocate(0, 23);
 		wPstr(msgSal);
 		sprintf(msgCC, "C/C [%c]: %lld-%s",
-			(_stricmp(c_condiva, "RI") == 0)? 'A': 'B',
+			CCTicketComun? 'T': ((_stricmp(c_condiva, "RI") == 0)? 'A': 'B'),
 			_atoi64(c_cod), 
 			c_nombre);
 		//WriteBootLog("Pasa por Cliente aqui1");

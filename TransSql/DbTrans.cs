@@ -146,6 +146,9 @@ namespace TransSql
             medio.Alipercep = Convert.ToInt32(dr["modo"]);
             medio.Escredito = Convert.ToBoolean(dr["uso_cant"]) ? 'T' : 'F';
             medio.Esposnet = Convert.ToBoolean(dr["uso_scan"]) ? 'T' : 'F';
+            medio.Reparticion = dr.IsNull("tipo") ? 0 : Convert.ToInt32(dr["tipo"]);
+            medio.CodPostal = dr.IsNull("ticket") ? 0 : Convert.ToInt32(dr["ticket"]);
+            medio.TipoCompElegido = dr.IsNull("otrop") ? 0 : Convert.ToInt32(dr["otrop"]);
             medio.Caja = Convert.ToInt16(dr["caja"]);
             medio.Tienda = dr["tienda"].ToString();
             medio.CnlVta = dr["cnlvta"].ToString();
@@ -410,7 +413,8 @@ namespace TransSql
                     cmd.Parameters.AddWithValue("@pesado", false);
                     cmd.Parameters.AddWithValue("@envase", 0);
                     cmd.Parameters.AddWithValue("@millas", string.Empty);
-                    cmd.Parameters.AddWithValue("@otrop", 0);
+                    // Comprobante elegido por el cajero para el cliente mayorista (83 = ticket comun).
+                    cmd.Parameters.AddWithValue("@otrop", (decimal) medio.TipoCompElegido);
                     cmd.Parameters.AddWithValue("@u_vuelto", medio.UVuelto != '\0');
                     cmd.Parameters.AddWithValue("@u_pend", medio.UPend != '\0');
                     cmd.Parameters.AddWithValue("@vuelto", medio.Vuelto);
@@ -424,8 +428,10 @@ namespace TransSql
                     cmd.Parameters.AddWithValue("@barrio", medio.Barrio);
                     cmd.Parameters.AddWithValue("@condiva", medio.Civa);
                     cmd.Parameters.AddWithValue("@local", medio.Local);
-                    cmd.Parameters.AddWithValue("@tipo", 0);
-                    cmd.Parameters.AddWithValue("@ticket", 0);
+                    // La reparticion y el codigo postal del cliente viajaban en cero: la caja
+                    // cobradora se quedaba sin la reparticion, que es la que gatea las promociones.
+                    cmd.Parameters.AddWithValue("@tipo", (decimal) medio.Reparticion);
+                    cmd.Parameters.AddWithValue("@ticket", (decimal) medio.CodPostal);
                     cmd.Parameters.AddWithValue("@zeta", 0);
                     cmd.Parameters.AddWithValue("@fecha_z", (decimal) medio.Nticket);
                     cmd.Parameters.AddWithValue("@modo", (decimal) medio.Alipercep);

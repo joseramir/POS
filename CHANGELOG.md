@@ -226,6 +226,130 @@ tickets anteriores. El comprobante de esa venta se emitio bien (ticket 115).
 
 ---
 
+## 2026-08-26 - HU03: cliente mayorista puede elegir ticket comun
+
+### Contexto
+
+Requerimiento HU03 (`bin/Cliente.Mayorista.txt`). Hoy, al seleccionar un cliente, el POS emite
+automaticamente ticket factura A o B segun la condicion ante el IVA (`ProcMpag`, bloque
+`nro == 9999`). Para los clientes de la **reparticion 17 (Cliente Mayorista)** se pide poder
+elegir, opcionalmente, **ticket comun (83)**; el resto de los clientes no cambia.
+
+El ticket comun del mayorista ademas no debe calcular percepciones ni llevar documento,
+direccion ni razon social. Los tres requisitos salen del mismo interruptor: **`GlobalTF = 0`**.
+No alcanza con `pf->TipoComprobante`, porque `PrintEncab()` de cada driver arranca en 83 y solo
+pasa a la rama de factura si `GlobalTF != 0` (`PPR250.cpp:666`), pisando lo que haya quedado.
+Las cuatro funciones de percepcion/recargo de `FACTU.CPP` (`FactuReca`, `FactuPercep`,
+`FactuPercepTissh`, `FactuPercepIva`) ya estan gateadas por `GlobalTF`.
+
+SAP lee `trans.dbf` y trata **`func = 2` + `nro = 9999`** como ticket factura. Como ese es el
+unico registro que consume, la marca tiene que viajar adentro de el.
+
+### Cambios
+
+**1. Campo nuevo en el registro del cliente, sin tocar el esquema del DBF**
+(`SRC/Include/FUNCS.H`)
+
+- `DDmpag_`: se agrega `int tipoCompElegido` al final (0 = automatico segun `civa`, 83 = ticket
+  comun elegido por el cajero).
+- `xxDDmpag`: entrada `{ SZ_INT, 'I', "otrop" }` al final de la tabla.
+- `dDbf_.dFld[]` pasa de 30 a 32 entradas. `xxDDmpag` ya usaba las 30 (29 campos + el
+  terminador `{0}`), asi que la entrada nueva daba **error C2078 "too many initializers"** en
+  VS2008. El walk de `trEncode`/`trDecode` corta por el terminador (`while(xf->ancho)`,
+  `DUMP.CPP:200`), no por el tamano del array, y `xxDump[]` es un array de punteros: agrandarlo
+  solo suma memoria estatica. **A tener en cuenta si se agrega otro campo a cualquier tabla.**
+
+`crStr` (`DUMP.CPP:46`) define un esquema unico compartido por todos los tipos de registro, y la
+columna `otrop` **no la usa el `DMpag`**: ya existe fisicamente, asi que los `trans.dbf` viejos
+se siguen leyendo y los registros anteriores traen 0 (ABAP los trata como hoy). Mismo criterio
+que `DPromo_.accionSeq` sobre la columna `que_anula` (`FUNCS.H:252`), en produccion desde el
+2026-08-15.
+
+**2. Eleccion en la pantalla de cliente** (`MpagCliente.h`, `OPC.H`, `VARIAB.CPP`)
+
+- CheckBox `chkTicketComun`, oculto por defecto. Se muestra en `bEnter_Click` solo si
+  `Dump::actCliente->Repa == REPA_MAYORISTA` (17) y no hay ticket empezado (`!inOper`): con el
+  comprobante ya abierto la eleccion no tendria efecto.
+- Con teclado se tilda con la tecla **X** (`AcceptKey`); en modo `_kbModo == 4` todas las teclas
+  llegan al form salvo las que mapean a F8 (`Strings.h:249`).
+- `btOk_Click` deja el resultado en la global nueva `CCTicketComun`, que `ResetPOS`
+  (`DUMP.CPP`) y `Cancel_Click` limpian.
+
+**3. Propagacion** (`MPAGO.CPP`, `TICKFAC.CPP`)
+
+- `ForceCC()`: graba `mpag.tipoCompElegido = 83` cuando el cajero eligio ticket comun y la
+  reparticion es la 17.
+- `ProcMpag()`, bloque `nro == 9999`: si el registro trae 83, deja `GlobalTF = 0` y
+  `pf->TipoComprobante = 83` en lugar del 81/82 por `civa`. Como la decision sale **del propio
+  registro**, vale igual en vivo, al reprocesar el dump y en la caja cobradora.
+- `ProcTickFac()`: dejaba `GlobalTF = 1` siempre que `flag` estuviera en 1, pisando lo que habia
+  decidido `ProcMpag` (el `DTickFac` se graba despues del `DMpag`). Ahora respeta la eleccion.
+- `ProcMpag()` restaura ademas `ClienteBenef` desde `mpg->reparticion`. En vivo es redundante
+  (`ForceCC` lo acaba de grabar), pero al reprocesar el dump y en la caja cobradora quedaba en 0.
+  **Cambia comportamiento**: las promociones gateadas por reparticion (`PROMOS.cpp:367`,
+  `Plugin.cpp:798`) ahora tambien aplican en esos dos casos.
+
+**4. Caja cobradora** (`TransSql/ParaTrans.cs`, `DbTrans.cs`, `Importa.cs`)
+
+- `MDMpag`: propiedades `TipoCompElegido`, `Reparticion` y `CodPostal`.
+- `InsertMPago`: `@otrop`, `@tipo` y `@ticket` pasan a mandar los valores reales. **Iban los tres
+  en cero fijo**, con lo cual la reparticion del cliente se perdia en el viaje a SQL (y con ella
+  el gate de promociones de la cobradora, `PROMOS.cpp:367`). `GetPago` ahora tambien los lee.
+- `Importa.ToDbf`: cuando la venta se cobra como ticket (`GetTrans` devuelve `@pesticket = 1`,
+  que es cuando existe un `func = 8` / `DFactu1`), se descartan los registros de ticket factura
+  -- entre ellos el `func = 2 / nro = 9999`. Ese descarte ahora **no se aplica** si el registro
+  trae `otrop = 83`: en ese caso el cliente y su reparticion tienen que llegar a la cobradora, y
+  es el propio dato el que hace que alla tambien salga ticket y no factura. Los casos viejos
+  (`otrop = 0`) se siguen descartando igual que antes.
+
+**5. Condicion ante el IVA en el webapi** (`MPAGO.CPP`, funcion nueva `SetTipoIvaDoc()`)
+
+Defecto preexistente, independiente del HU: `HeaderDoc.mTipoIva` **no lo seteaba nadie**, asi que
+todos los comprobantes viajaban al webapi con el default del constructor (Consumidor Final,
+`IdCondIva = 1`), incluso los ticket factura A de un Responsable Inscripto. `ClienteComprobante`
+lo persiste como `@idcondiva`. Ahora se completa desde `c_condiva` en `LeeCCDatos()` y en el
+bloque 9999 de `ProcMpag()`.
+
+**6. `docActual` del bloque 9999 dejo de depender de `Dump::actCliente`** (`MPAGO.CPP`)
+
+Se llenaba con `Dump::actCliente->Cod/Nombre/Direccion/RepaDes`, y `actCliente` solo existe
+cuando el cliente se busco en SQL en esa misma corrida: al reprocesar el dump tras un reinicio y
+en la caja cobradora es `nullptr`, con lo que el bloque tiraba `NullReferenceException` y el
+`catch` de `ProcMpag` relanza (`throw "Error"`) sin que `ReprocActualTran` lo atrape -- ademas de
+dejar sin ejecutar `GCStatic::ReleaseLockFromTrans`. Los datos salen ahora del propio registro
+(`cc`, `nombre`, `direc`, `civa`, `reparticion`); la descripcion de la reparticion se toma de
+`actCliente` solo si esta disponible.
+
+**7. La letra del comprobante en pantalla** (`SRC/Devices/POSDISP.CPP`)
+
+Con el ticket comun elegido, el ticket impreso salia bien pero la pantalla seguia mostrando el
+cliente como `C/C [A]` o `C/C [B]`. `PrintTktTot()` sacaba la letra unicamente de `c_condiva`,
+sin mirar `GlobalTF`, y `tickfac_()` la llama apenas se selecciono el cliente. Con `GlobalTF = 0`
+no corresponde ninguna letra de factura: ahora muestra **`C/C [T]`** cuando `CCTicketComun` esta
+activo, en los dos `sprintf` de la funcion (el normal y el de `globalCheckPriceOverflow`). Es
+display puro, no toca la logica fiscal, y el ancho del texto no cambia.
+
+Se usa `CCTicketComun` y no `!GlobalTF` a proposito: la global se restaura desde el registro en
+`ProcMpag()`, asi que vale tambien al reprocesar el dump, y deja fuera los casos de cobranza de
+cuenta corriente (`globalCobraCC`, `globalCCOnline`), que tienen `GlobalTF` en cero sin ser el
+ticket comun del mayorista.
+
+### Pendiente
+
+- Alta de la reparticion 17 en la tabla `reparticiones` y el `repa` de los clientes: es dato, no
+  codigo.
+- Notas de credito: quedan como estan. Si el comprobante original fue ticket comun, la NC que
+  corresponde es la 110 y `PrintEncab()` ya la produce con `GlobalTF = 0`. Falta ver, con un caso
+  real, si la NC de una de estas ventas pasa por la identificacion de cliente: si pasa,
+  `ProcNcMpag()` (`MPAGO.CPP:3016`) la llevaria a 112/113 y habria que aplicarle el mismo
+  criterio que a `ProcMpag()`.
+- `GetPago` (`DbTrans.cs`) arma el `MDMpag` con `Func = 4` en lugar de 2. Hoy es inocuo porque
+  los registros importados vienen con `Towrite = false` y `WriteTrans` no los reinserta, pero es
+  un bug latente: si alguna vez se pusiera en `true`, el `switch` caeria en `case 4` e intentaria
+  `InsertPlu((MDPlu)reg)` sobre un `MDMpag`. No se toco.
+
+---
+
 ## 2026-08-24 - Voucher de Mutual Comodin: imprimia el numero del ticket anterior
 
 ### Contexto

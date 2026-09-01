@@ -77,7 +77,19 @@ namespace TransSql
         public char Escredito {get; set;}        
         
         public char Esposnet {get; set;}
-        
+
+        /// <summary>Reparticion del cliente (columna "tipo" del trans).</summary>
+        public int Reparticion {get; set;}
+
+        /// <summary>Codigo postal del cliente (columna "ticket" del trans).</summary>
+        public int CodPostal {get; set;}
+
+        /// <summary>
+        /// Comprobante elegido por el cajero (columna "otrop" del trans): 0 = automatico
+        /// segun la condicion ante el IVA, 83 = ticket comun pedido para el cliente mayorista.
+        /// </summary>
+        public int TipoCompElegido {get; set;}
+
 
         public MDMpag():base()
         {
@@ -91,6 +103,9 @@ namespace TransSql
             this.Dtarjeta = string.Empty;
             this.Alipercep = 0;
             this.Escredito = this.Esposnet = 'F';
+            this.Reparticion = 0;
+            this.CodPostal = 0;
+            this.TipoCompElegido = 0;
         }
     }
 

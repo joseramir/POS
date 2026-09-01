@@ -194,7 +194,7 @@ struct dFld_ {
 };
 struct dDbf_ {
 	int func;							// Id de la funcion.
-	struct dFld_ dFld[30];				// Campos de la estructura.
+	struct dFld_ dFld[32];				// Campos de la estructura.
 };
 
 //  Estructuras de dumping sobre el archivo 'trans.dat'.
@@ -875,6 +875,8 @@ struct DDmpag_ {
 	char montoextrac[14];
 	int codpostal;			//Codigo postal del cliente
 	int reparticion;		//reparticion del cliente
+	int tipoCompElegido;	//Comprobante elegido por el cajero (0=automatico segun civa, 83=ticket comun).
+							//Reusa una columna libre del DBF: NO cambia el esquema.
 
 };
 #ifdef IN_DUMP
@@ -909,6 +911,7 @@ dDbf_ xxDDmpag = { DMpag, {
 	{ SZ_CHAR*14, 'C', "millas" },    
 	{ SZ_INT,     'I', "ticket" },
 	{ SZ_INT,     'I', "tipo" },
+	{ SZ_INT,     'I', "otrop" },
 	{0}
 }};
 #endif

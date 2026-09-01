@@ -111,11 +111,19 @@ void ProcTickFac(void *p_, int fwrite)
     p = (struct DTickFac_ *) p_;
     if(fwrite) WriteDump(p);
 	if(p->flag)
-		GlobalTF = 1;
+	{
+		//   El DMpag del cliente se graba ANTES que este registro y es el que decide el
+		//   comprobante. Si el cajero eligio ticket comun para el cliente mayorista, no hay
+		//   que volver a subirlo a ticket factura: es el unico caso con cliente identificado
+		//   y GlobalTF en cero.
+		if(!CCTicketComun)
+			GlobalTF = 1;
+	}
 	else
 	{
 		GlobalTF = 0;
 		GlobalCCSelected = false;
+		CCTicketComun = false;
 	}
 }
 

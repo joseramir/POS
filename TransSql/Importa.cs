@@ -54,7 +54,16 @@ namespace TransSql
                         {
                             if (Convert.ToInt16(dr["func"]) == 8 || Convert.ToInt16(dr["func"]) == 28 || Convert.ToInt16(dr["func"]) == 31 || Convert.ToInt16(dr["func"]) == 38)
                                 continue;
-                            if (esticket && !solofact && (Convert.ToInt16(dr["func"]) == 19 ||
+                            // El registro del cliente se descarta cuando la venta se cobra como
+                            // ticket, salvo que traiga la eleccion explicita del cajero
+                            // (otrop = 83, cliente mayorista con ticket comun): en ese caso el
+                            // cliente tiene que llegar a la cobradora junto con su reparticion,
+                            // y es el propio dato el que hace que alla salga ticket y no factura.
+                            bool eligioTicketComun = Convert.ToInt16(dr["func"]) == 2 &&
+                                Convert.ToInt16(dr["nro"]) == 9999 &&
+                                !dr.IsNull("otrop") && Convert.ToInt32(dr["otrop"]) == 83;
+                            if (esticket && !solofact && !eligioTicketComun &&
+                                (Convert.ToInt16(dr["func"]) == 19 ||
                                 (Convert.ToInt16(dr["func"]) == 2 && Convert.ToInt16(dr["nro"]) == 9999) || Convert.ToInt16(dr["func"]) == 20))
                                 continue;
                             if (Convert.ToInt16(dr["func"]) == 2 && Convert.ToInt16(dr["nro"]) == 9999)
