@@ -1087,7 +1087,7 @@ int PrinterPR250::PrintClose()
 		sprintf(auxley, "OTROS IMPUESTOS NACIONALES INDIRECTOS: $ %.2lf", AcumImpuestosInternos);		
 		sprintf(txbuff, "\x9E%c%d%c%s%c%s%cD%ct", SEP, 3, SEP, "08", SEP, auxley, SEP, SEP);	
 		EnviaRecibePaquete(txbuff);
-		if (leyendaFinde != 0){
+		if (leyendaFinde[0] != 0){
 			SetPie(".", 14);
 			sprintf(txbuff, "\x9E%c%d%c%s%c%s%cD%ct", SEP, 5, SEP, "08", SEP, leyendaFinde, SEP, SEP);	
 			EnviaRecibePaquete(txbuff);
@@ -1103,7 +1103,7 @@ int PrinterPR250::PrintClose()
 		SetPie("", 11);
 		SetPie("", 12);
 		SetPie("", 13);
-		if (leyendaFinde != 0){
+		if (leyendaFinde[0] != 0){
 			SetPie(".", 14);
 			sprintf(txbuff, "\x9E%c%d%c%s%c%s%cD%ct", SEP, 5, SEP, "08", SEP, leyendaFinde, SEP, SEP);	
 			EnviaRecibePaquete(txbuff);

@@ -184,6 +184,48 @@ cargo del webapi.
 
 ---
 
+## 2026-08-28 - Impresora fiscal: la leyenda de fin de semana se enviaba siempre, vacia
+
+### Contexto
+
+Revisando el `errormain.txt` del 2026-08-28 aparecio, en el log de comunicacion con la
+impresora (`bin/log.pos`), que el cierre de cada comprobante manda un comando de leyenda con
+el texto vacio y la impresora lo rechaza:
+
+```
+PC==>PRN: '{9E}|5|08||D|t'
+PRN==>PC: '0000|B210'
+```
+
+El `B210` es un estado de error del fiscal: el comando se descarta. Pasaba en los ocho tickets
+del `bin/log.1` del 2026-08-26 y en el del 2026-08-28, o sea en todas las ventas.
+
+La causa es una comparacion mal escrita en `PrintClose()`. `leyendaFinde` es un
+`char[51]` (`VARIAB.CPP:284`), no un puntero: `leyendaFinde != 0` evalua la direccion del
+array, que nunca es nula, asi que la condicion daba siempre verdadero. La leyenda solo se
+carga cuando corresponde una promocion con cupon (`PROMOS.cpp:810`) y se limpia en
+`ResetPOSAcumInternal` (`DUMP.CPP:2759`); el resto del tiempo la cadena esta vacia y se
+mandaba igual, junto con el `SetPie(".", 14)` que la acompana.
+
+### Parche
+
+**`SRC/Devices/PPR250.cpp` (lineas 1090 y 1106) y `SRC/Devices/PrinterTermica.cpp`
+(lineas 1002 y 1018):**
+
+- `if (leyendaFinde != 0)` pasa a `if (leyendaFinde[0] != 0)` en los cuatro lugares (la rama
+  de ticket/factura con transparencia fiscal y la rama del `else if` de condicion IVA), de
+  manera que se mire el contenido de la cadena y no la direccion del array.
+
+Con esto el comando de leyenda -y el punto del pie- solo salen cuando la promocion realmente
+cargo un texto, y desaparece el `B210` de cada cierre.
+
+**No corrige** la excepcion del 2026-08-28 20:14 (`ProcMpag` -> `WriteEOPFiscal`, "Un
+componente externo produjo una excepcion"). Esa se produjo en el comando siguiente al cierre
+`E|0|`, dentro de `Winfis.dll`, y el `B210` venia repitiendose sin consecuencias en todos los
+tickets anteriores. El comprobante de esa venta se emitio bien (ticket 115).
+
+---
+
 ## 2026-08-24 - Voucher de Mutual Comodin: imprimia el numero del ticket anterior
 
 ### Contexto
