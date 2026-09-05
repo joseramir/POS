@@ -70,6 +70,44 @@ void Alert(char *c1, char *c2)
 }
 
 
+//   Muestra un mensaje que puede venir partido con un '\n' (por ejemplo, el campo 'mensaje'
+//   que devuelve el endpoint de Parking): lo que esta antes del salto va en la primera linea
+//   del alerta y lo que sigue en la segunda. Si no trae salto, se comporta como un Alert comun.
+void AlertDosLineas(char *msg)
+{
+	char l1[100], l2[100], *corte, *p;
+	int len;
+
+	l2[0] = '\0';
+	corte = strchr(msg, '\n');
+	if(corte == NULL)
+	{
+		strncpy(l1, msg, sizeof(l1) - 1);
+		l1[sizeof(l1) - 1] = '\0';
+	}
+	else
+	{
+		len = (int)(corte - msg);
+		if(len > (int)sizeof(l1) - 1)
+			len = (int)sizeof(l1) - 1;
+		memcpy(l1, msg, len);
+		l1[len] = '\0';
+		strncpy(l2, corte + 1, sizeof(l2) - 1);
+		l2[sizeof(l2) - 1] = '\0';
+	}
+
+	//   El alerta tiene dos renglones nada mas: los saltos que sobren pasan a ser espacios.
+	for(p = l1; *p; p++)
+		if(*p == '\r' || *p == '\n')
+			*p = ' ';
+	for(p = l2; *p; p++)
+		if(*p == '\r' || *p == '\n')
+			*p = ' ';
+
+	Alert(l1, l2);
+}
+
+
 //   Abre una ventana con un par de mensajes (normalmente, mensajes de orientación)
 //   y la deja abierta hasta que se llama a la función 'ClearMsg'
 void SendMsg(char *c1, char *c2)

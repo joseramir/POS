@@ -101,7 +101,7 @@ void IngIdParking(int cual)
 	{
 		if (inOper == 0)
 		{
-			char msgConsu[100];
+			char msgConsu[200];
 			if (procesaParking)
 			{
 				//   Antes de operar con el estacionamiento se verifica que la aplicacion de Parking
@@ -121,7 +121,7 @@ void IngIdParking(int cual)
 					// Falta el cierre en la aplicacion de Parking: no se puede operar.
 					cierreRealizado = false;
 					if (consuCierre->mensaje != nullptr)
-						Strings::StringToChar(consuCierre->mensaje, msgConsu, 100);
+						Strings::StringToChar(consuCierre->mensaje, msgConsu, 200);
 					else
 						strcpy(msgConsu, "Falta realizar el cierre en Estacionamiento");
 					WLog("PARKING - Cierre de Estacionamiento sin realizar, no se opera. Msg='%s'", msgConsu);
@@ -130,18 +130,18 @@ void IngIdParking(int cual)
 				{
 					validadoCierreEstacionamiento = true;		// Ya verificado, no reconsultar en este ticket.
 					if (consuCierre->mensaje != nullptr)
-						Strings::StringToChar(consuCierre->mensaje, msgConsu, 100);
+						Strings::StringToChar(consuCierre->mensaje, msgConsu, 200);
 				}
 
 				delete consuCierre;
 
 				if (!cierreRealizado)
 				{
-					Alert(msgConsu, "");
+					AlertDosLineas(msgConsu);
 					return;
 				}
 				if (msgConsu[0])
-					Alert(msgConsu, "");
+					AlertDosLineas(msgConsu);
 
 				frmIngNumParking^ fnumpedido = gcnew frmIngNumParking();
 				fnumpedido->ShowDialog();

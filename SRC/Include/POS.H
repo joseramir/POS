@@ -415,6 +415,7 @@ int  LoadMessages(void);				// Messg.c
 
 void Alert(char *, char *);				// Alert.c
 void Alert(char *, char *, bool);		// Alert.c
+void AlertDosLineas(char *);			// Alert.c
 int GetSiNo(char *, char *);
 int GetSiNo(char *, char *, bool);
 void sleep_(int);

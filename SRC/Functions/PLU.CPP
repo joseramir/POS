@@ -832,7 +832,7 @@ void plu_(int cual)
 			LibEntidades::Alberdi::Parking::ClienteParking^ cliParking = gcnew LibEntidades::Alberdi::Parking::ClienteParking();
 			LibEntidades::Alberdi::Parking::AutorizacionCierre^ consuCierre = cliParking->ConsultaCierreRealizado();
 			bool cierreRealizado = true;
-			char msgConsu[100];
+			char msgConsu[200];
 
 			msgConsu[0] = '\0';
 			if (consuCierre == nullptr)
@@ -842,7 +842,7 @@ void plu_(int cual)
 				// Falta el cierre en la aplicacion de Parking: no se puede facturar.
 				cierreRealizado = false;
 				if (consuCierre->mensaje != nullptr)
-					Strings::StringToChar(consuCierre->mensaje, msgConsu, 100);
+					Strings::StringToChar(consuCierre->mensaje, msgConsu, 200);
 				else
 					strcpy(msgConsu, "Falta realizar el cierre en Estacionamiento");
 				WLog("PARKING - Cierre de Estacionamiento sin realizar, no se factura. Msg='%s'", msgConsu);
@@ -854,7 +854,7 @@ void plu_(int cual)
 
 			if (!cierreRealizado)
 			{
-				Alert(msgConsu, "");
+				AlertDosLineas(msgConsu);
 				return;
 			}
 		}

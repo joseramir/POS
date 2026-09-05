@@ -71,6 +71,42 @@ cambio ese arqueo tildaba la caja.
 
 ---
 
+## 2026-09-02 - Parking: el mensaje del cierre se muestra en dos lineas
+
+### Contexto
+
+El endpoint `autorizacion-cierre-caja` devuelve un campo **`mensaje`** que se muestra tal cual
+en el alerta cuando la aplicacion de Parking todavia no hizo su cierre. El texto crecio y ahora
+viene partido con un `\n` desde el servidor, pero el alerta lo recibia entero en el primer
+renglon (`Alert(msgConsu, "")`): el `\n` no lo corta y el sobrante quedaba fuera del ancho del
+`AlertForm` (458 px, Tahoma 12 bold: entran unos 45 caracteres por linea).
+
+### Cambios
+
+**1. `AlertDosLineas()`** (`ALERT.CPP`, prototipo en `POS.H`)
+
+Funcion nueva al lado de `Alert`. Corta el mensaje en el primer `\n`: lo de antes va al
+renglon de arriba del alerta y lo de despues al de abajo. Si no hay salto de linea se comporta
+igual que `Alert(msg, "")`. Los saltos que sobren (la form tiene dos renglones nada mas) y los
+`\r` se reemplazan por espacios para que no salgan como cuadraditos en el Label.
+
+**2. Los dos puntos que consultan el cierre**
+
+- `PLU.CPP:830` (`plu_`, no se puede facturar sin el cierre) -> `AlertDosLineas(msgConsu)`.
+- `OperPromosServ.cpp:99` (`IngIdParking`, no se puede operar sin el cierre) -> los **dos**
+  alertas, el del cierre faltante y el informativo que sale cuando el cierre si esta hecho
+  pero el endpoint igual manda un `mensaje`.
+
+En ambos archivos el buffer `msgConsu` paso de **100 a 200** bytes, junto con el `maxlen` del
+`Strings::StringToChar`: con 100 el mensaje nuevo se truncaba antes de llegar al `\n` y el
+corte no se podia hacer.
+
+### Pendiente
+
+Sin compilar en VS2008 ni probar contra el endpoint real.
+
+---
+
 ## 2026-09-01 - Precios puntualizados: el ticket no aplica promociones
 
 ### Contexto
