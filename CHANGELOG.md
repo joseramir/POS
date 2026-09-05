@@ -5,6 +5,72 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-04 - Arqueo remoto: la caja se tildaba leyendo el archivo de otra caja
+
+### Contexto
+
+Reportado el 2026-09-04: una caja quedo tildada al hacer el arqueo de un cajero flotante, no
+salio la impresion y hubo que reiniciarla. En el server el archivo de venta rapida del cajero
+figuraba abierto.
+
+`QuickVentas()` graba el resumen de venta del cajero **escribiendo los objetos enteros** al
+archivo (`write(h, acc, sizeof(Acum))`), y la clase `Acum` tiene como segundo campo el puntero
+`char *_des`. O sea que en el archivo del server queda grabada **una direccion de memoria del
+proceso de la caja que lo escribio**.
+
+Del otro lado, `IncorporeOneFile()` leia esos registros sobre un `Acum acSrc` **local**, que se
+construye con su `_des = new char[80]` legitimo. El `read()` lo pisaba con la direccion ajena y,
+al salir del bloque, `~Acum()` hacia `delete` sobre esa direccion **en el heap de la caja que
+esta haciendo el arqueo**. De ahi el cuelgue. Como el destructor corre antes del `close(h)`, el
+archivo del server quedaba abierto: exactamente lo que se vio.
+
+Es intermitente porque solo se leen registros `Acum` si el archivo trae cobranzas de servicios,
+envases recuperados o envases vendidos; si esos tres bloques vienen en cero (el caso comun) no
+se lee ninguno y no pasa nada. Los dos archivos del incidente lo confirman: el de la caja 2 no
+tenia ninguno, y el de la caja 4 traia **un** envase recuperado (codigo 9609) con el campo del
+puntero en `0x07038FF8`.
+
+El fix del 2026-08-18 (comparticion explicita, escritura atomica y logging) no tocaba esto.
+
+### Cambios (`DUMP.CPP`)
+
+**1. Se lee sobre un espejo, no sobre un `Acum`**
+
+Struct nuevo `QuickAcum` bajo `#pragma pack(1)`, con el mismo layout que `Acum` pero con el
+puntero declarado como un `int` inerte que se ignora. No tiene constructor ni destructor, asi
+que ya no hay ningun `delete` sobre memoria ajena. El formato del archivo **no cambia**, para
+que siga funcionando entre cajas con versiones distintas del ejecutable. Un `typedef` de
+chequeo hace fallar la compilacion si alguien cambia `Acum` y los tamanos dejan de coincidir.
+
+**2. Toda lectura se valida**
+
+`ReadCantQuickFile()` y `ReadRegQuickFile()` verifican que el `read` haya traido los bytes
+pedidos, y que la cantidad de registros declarada este entre 0 y `MAX_QUICK_ITEMS` (500). Antes
+ninguna lectura se chequeaba: un archivo truncado o corrupto podia meter un `cant` de millones y
+el `for` se quedaba creando acumuladores para siempre. Ahora se corta la incorporacion de ese
+archivo y queda la linea en el log; el arqueo sigue con las demas cajas.
+
+**3. `IncorporeOneFile` abre de solo lectura**
+
+Pasa de `O_RDWR` a `O_RDONLY`: no escribe nada y no hay motivo para pedir escritura sobre un
+archivo del server.
+
+**4. El arqueo saltea los `.tmp`**
+
+`IncorporaVentaRemota()` busca con la mascara `<cajero><fecha>.*`, que tambien trae el temporal
+`<cajero><fecha>.<caja>.tmp` que introdujo el fix del 08-18. La exclusion de la propia caja
+compara los ultimos 4 caracteres (`.003`) y con `.tmp` nunca daba, asi que un temporal huerfano
+(por una caida entre la escritura y el `MoveFileEx`) se hubiera incorporado como si fuera un
+archivo publicado.
+
+### Pendiente
+
+Sin compilar en VS2008. Para validar: arqueo de un cajero flotante cuando alguna de las otras
+cajas registro envases recuperados, envases vendidos o una cobranza de servicios; antes de este
+cambio ese arqueo tildaba la caja.
+
+---
+
 ## 2026-09-01 - Precios puntualizados: el ticket no aplica promociones
 
 ### Contexto

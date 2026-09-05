@@ -1501,87 +1501,154 @@ void WriteToQuickFile(int h, int cant, double monto)
 	write(h, &monto, sizeof(double));
 }
 
-void ReadFromQuickFile(int h, int *cant, double *monto)
+// Espejo binario del objeto 'Acum' tal como lo graba QuickVentas (escribe el objeto
+// entero, y toda esa familia de clases esta bajo #pragma pack(1)). La incorporacion
+// remota lee sobre este struct y NO sobre un 'Acum' de verdad, porque el segundo campo
+// de 'Acum' es el puntero '_des': al leerlo del archivo queda apuntando a una direccion
+// del proceso de la OTRA caja, y el destructor ~Acum() hace 'delete' sobre esa direccion
+// ajena. Eso corrompe el heap de la caja que esta haciendo el arqueo.
+#pragma pack(push, 1)
+struct QuickAcum
 {
-	read(h, cant, sizeof(int));
-	read(h, monto, sizeof(double));
+	int cod;
+	int des;		// El puntero '_des' del proceso que grabo el archivo. Se ignora.
+	int cant;
+	double monto;
+	double precio;
+};
+#pragma pack(pop)
+
+// Si alguien cambia los campos de 'Acum', el espejo deja de coincidir con lo que hay
+// grabado en los archivos y esto no compila (el array queda de tamano -1).
+typedef char ChequeoTamanoQuickAcum[(sizeof(QuickAcum) == sizeof(Acum)) ? 1 : -1];
+
+// Cantidad maxima razonable de registros en un bloque del archivo de venta rapida. Si
+// el archivo declara mas que esto es que esta corrupto o quedo a medio escribir, y hay
+// que cortar la incorporacion en vez de iterar millones de veces creando acumuladores.
+#define MAX_QUICK_ITEMS 500
+
+// Lee la cantidad de registros del bloque que sigue. Retorna 0, dejando rastro en el
+// log, si el archivo se corto antes o el valor no tiene sentido.
+int ReadCantQuickFile(int h, int *cant, char *fname, char *bloque)
+{
+	char tErrMsg[300];
+	*cant = 0;
+	if(read(h, cant, sizeof(int)) != sizeof(int) || *cant < 0 || *cant > MAX_QUICK_ITEMS)
+	{
+		sprintf(tErrMsg, "ERROR - IncorporeOneFile: '%s' corrupto en el bloque de %s (cant=%d)",
+			fname, bloque, *cant);
+		WLog(tErrMsg);
+		return 0;
+	}
+	return 1;
+}
+
+// Lee un registro completo del bloque. Retorna 0 si el archivo se corto.
+int ReadRegQuickFile(int h, void *dst, int tam, char *fname, char *bloque)
+{
+	char tErrMsg[300];
+	if(read(h, dst, tam) != tam)
+	{
+		sprintf(tErrMsg, "ERROR - IncorporeOneFile: '%s' se corto leyendo el bloque de %s",
+			fname, bloque);
+		WLog(tErrMsg);
+		return 0;
+	}
+	return 1;
+}
+
+int ReadFromQuickFile(int h, int *cant, double *monto, char *fname, char *bloque)
+{
+	*cant = 0;
+	*monto = 0;
+	if(!ReadRegQuickFile(h, cant, sizeof(int), fname, bloque)) return 0;
+	if(!ReadRegQuickFile(h, monto, sizeof(double), fname, bloque)) return 0;
+	return 1;
+}
+
+// Suma al arqueo del cajero actual el contenido de un archivo de venta rapida ya
+// abierto. Cualquier bloque que no se pueda leer entero corta la incorporacion de ESE
+// archivo (queda en el log): es preferible un arqueo al que le falta una caja, y avisado,
+// a uno que se cuelga o que suma basura.
+void IncorporeQuickStream(int h, char *fname)
+{
+	AcumCajero *acClk = (AcumCajero *)ZetaCajeros->Find(ckaNro);
+	if(acClk == NULL) return;
+
+	AcumMedio src, *dst;
+	QuickAcum acSrc;
+	Acum *acDst;
+	int cant;
+	double monto = 0;
+
+	// Agrega las ventas.
+	if(!ReadCantQuickFile(h, &cant, fname, "medios de cobro")) return;
+	for(int j = 0; j < cant; j++)
+	{
+		if(!ReadRegQuickFile(h, &src, sizeof(AcumMedio), fname, "medios de cobro")) return;
+		dst = acClk->VerAcumuladorMedio(src.VerNumeroMedio());
+		dst->AgregaCobro(src.VerMontoCobros(), src.VerCantidadCobros());
+		dst->AgregaDotacion(src.VerMontoDotaciones(), src.VerCantidadDotaciones());
+		dst->AgregaRetiro(src.VerMontoRetiros(), src.VerCantidadRetiros());
+		dst->AgregaVenta(src.VerMontoVentas(), src.VerCantidadVentas());
+		dst->AgregaExtraccion(src.VerMontoExtracciones(), src.VerCantidadExtracciones());
+
+		acClk->Retiro(src.VerCantidadRetiros(), src.VerMontoRetiros());
+	}
+
+	// Agrega las cobranzas de servicios.
+	if(!ReadCantQuickFile(h, &cant, fname, "cobranzas")) return;
+	for(int j = 0; j < cant; j++)
+	{
+		if(!ReadRegQuickFile(h, &acSrc, sizeof(QuickAcum), fname, "cobranzas")) return;
+		acDst = acClk->VerAcumuladorCobros(acSrc.cod);
+		acDst->Agrega(acSrc.cant, acSrc.monto);
+	}
+
+	if(!ReadFromQuickFile(h, &cant, &monto, fname, "anulacion de renglones")) return;
+	acClk->AnulaRenglon(cant, monto);
+	if(!ReadFromQuickFile(h, &cant, &monto, fname, "anulacion de tickets")) return;
+	acClk->AnulaTicket(cant, monto);
+	if(!ReadFromQuickFile(h, &cant, &monto, fname, "suspensiones")) return;
+	acClk->Suspension(cant, monto);
+	if(!ReadFromQuickFile(h, &cant, &monto, fname, "percepciones")) return;
+	acClk->Percepcion(cant, monto);
+	if(!ReadFromQuickFile(h, &cant, &monto, fname, "extracciones")) return;
+	acClk->Extraccion(cant, monto);
+
+	// Agrega acumuladores de envases recuperados.
+	if(!ReadCantQuickFile(h, &cant, fname, "envases recuperados")) return;
+	for(int j = 0; j < cant; j++)
+	{
+		if(!ReadRegQuickFile(h, &acSrc, sizeof(QuickAcum), fname, "envases recuperados")) return;
+		acDst = acClk->VerAcumuladorEnvases(acSrc.cod);
+		acDst->Agrega(acSrc.cant, acSrc.monto);
+	}
+
+	// Agrega acumuladores de envases vendidos.
+	if(!ReadCantQuickFile(h, &cant, fname, "envases vendidos")) return;
+	for(int j = 0; j < cant; j++)
+	{
+		if(!ReadRegQuickFile(h, &acSrc, sizeof(QuickAcum), fname, "envases vendidos")) return;
+		acDst = acClk->VerAcumuladorEnvasesVendidos(acSrc.cod);
+		acDst->Agrega(acSrc.cant, acSrc.monto);
+	}
 }
 
 // Incorpora a la venta de UN cajero, la informacion del archivo que se le indica.
 void IncorporeOneFile(char *fname)
 {
-	int h = sopen(fname, O_RDWR | O_BINARY, SH_DENYNO);
+	int h = sopen(fname, O_RDONLY | O_BINARY, SH_DENYNO);
 	if(h < 0)
 	{
 		char tErrMsg[300];
 		sprintf(tErrMsg, "ERROR - IncorporeOneFile no pudo abrir '%s' para el arqueo remoto (errno=%d)", fname, errno);
 		WLog(tErrMsg);
+		return;
 	}
-	if(h >= 0)
-	{
-		AcumCajero *acClk = (AcumCajero *)ZetaCajeros->Find(ckaNro);
-		if(acClk != NULL)
-		{
-			AcumMedio src, *dst;
-			Acum acSrc, *acDst;
 
-			// Agrega las ventas.
-			int cant;
-			read(h, &cant, sizeof(int));
-			for(int j = 0; j < cant; j++)
-			{
-				read(h, &src, sizeof(AcumMedio));
-				dst = acClk->VerAcumuladorMedio(src.VerNumeroMedio());
-				dst->AgregaCobro(src.VerMontoCobros(), src.VerCantidadCobros());
-				dst->AgregaDotacion(src.VerMontoDotaciones(), src.VerCantidadDotaciones());
-				dst->AgregaRetiro(src.VerMontoRetiros(), src.VerCantidadRetiros());
-				dst->AgregaVenta(src.VerMontoVentas(), src.VerCantidadVentas());
-				dst->AgregaExtraccion(src.VerMontoExtracciones(), src.VerCantidadExtracciones());
-
-				acClk->Retiro(src.VerCantidadRetiros(), src.VerMontoRetiros());
-			}
-
-			read(h, &cant, sizeof(int));
-			for(int j = 0; j < cant; j++)
-			{
-				read(h, &acSrc, sizeof(Acum));
-				acDst = acClk->VerAcumuladorCobros(acSrc.VerCodigo());
-				acDst->Agrega(acSrc.VerCantidad(), acSrc.VerMonto());
-			}
-
-			double monto = 0;
-			ReadFromQuickFile(h, &cant, &monto);
-			acClk->AnulaRenglon(cant, monto);
-			ReadFromQuickFile(h, &cant, &monto);
-			acClk->AnulaTicket(cant, monto);
-			ReadFromQuickFile(h, &cant, &monto);
-			acClk->Suspension(cant, monto);
-			ReadFromQuickFile(h, &cant, &monto);
-			acClk->Percepcion(cant, monto);
-			ReadFromQuickFile(h, &cant, &monto);
-			acClk->Extraccion(cant, monto);
-
-			// Agrega acumuladores de envases recuperados.
-			read(h, &cant, sizeof(int));
-			for(int j = 0; j < cant; j++)
-			{
-				read(h, &acSrc, sizeof(Acum));
-				acDst = acClk->VerAcumuladorEnvases(acSrc.VerCodigo());
-				acDst->Agrega(acSrc.VerCantidad(), acSrc.VerMonto());
-			}
-
-			// Agrega acumuladores de envases vendidos.
-			read(h, &cant, sizeof(int));
-			for(int j = 0; j < cant; j++)
-			{
-				read(h, &acSrc, sizeof(Acum));
-				acDst = acClk->VerAcumuladorEnvasesVendidos(acSrc.VerCodigo());
-				acDst->Agrega(acSrc.VerCantidad(), acSrc.VerMonto());
-			}
-		}
-
-		close(h);
-	}
+	IncorporeQuickStream(h, fname);
+	close(h);
 }
 
 // Calcula rapidamente la ventas y la graba en el archivo que se le indica.
@@ -2425,6 +2492,12 @@ void IncorporaVentaRemota(int cajero)
 			if(CheckNetwork())
 			{
 				sprintf(fname, "%s\\%s", p_Log, (char *)files->Item(i));
+
+				// Saltea los temporales de QuickVentas ('<archivo>.tmp'): todavia no son
+				// un archivo publicado, pero la mascara '<cajero><fecha>.*' tambien los trae.
+				char *pext = fname + strlen(fname) - 4;
+				if(strlen(fname) > 4 && !_stricmp(pext, ".tmp")) continue;
+
 				char *pfile = fname + strlen(fname) - strlen(cajaNum);
 				if(_stricmp(cajaNum, pfile))
 					IncorporeOneFile(fname);
