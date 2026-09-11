@@ -5,6 +5,47 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-11 - Saldo de caja: con varias reparticiones no se descontaba
+
+### Contexto
+
+Desde que el padrón pasó a `CLIENTE_REPARTICION` (un cliente puede tener varias reparticiones,
+cada una con su `SALDOCAJA`), el saldo de caja de las promos se leía y se descontaba mal para los
+clientes con más de una:
+
+1. **La lectura** (`spLeeSaldoPromoCli`) no filtra por repartición ni por estado, y no tiene
+   `ORDER BY`: el POS usaba el saldo de una fila cualquiera, incluso de una repartición dada de
+   baja.
+2. **El descuento** (`spUpdConsumoCli`) ya tenía el parámetro `@prepa`, pero el POS no lo mandaba.
+   Sin él, el SP solo descuenta si el cliente tiene **una** fila en `CLIENTE_REPARTICION`: con dos
+   o más **no descontaba nada**, y el cliente podía volver a usar el mismo saldo en la próxima
+   compra. Sin ningún error a la vista.
+
+Medido el 2026-09-11 en la base: 6.381 clientes tienen más de una repartición, y 5.277 de ellos
+tienen saldo de caja mayor a cero.
+
+### Cambios
+
+1. **SQL (base productiva, creado el 2026-09-11):** SP nuevo `spLeeSaldoPromoCliRepa @pcod, @prepa`,
+   que devuelve el saldo de caja de esa repartición (solo filas activas y sin baja). El
+   `spLeeSaldoPromoCli` viejo **no se tocó**: lo siguen usando las cajas con el ejecutable
+   anterior.
+2. `Controles/FuncClientes.cs`:
+   - `ActualizaConsumoCli` manda `@prepa` con la repartición del cliente (`-1` si no hay).
+   - `LeeSaldoPromoCli(cod, repa)` nueva: con repartición usa el SP nuevo; sin ella, el viejo. La
+     firma anterior queda y delega con `-1`.
+3. `MPAGO.CPP`, `LeeSaldoConsumo()`: pasa `Dump::actCliente->Repa`.
+
+La repartición es la que devuelve `spGetCliente` (y, cuando exista la selección en caja, la que
+elija el cajero), la misma con la que se decidió aplicar la promo.
+
+### Despliegue
+
+El SP nuevo ya existe, así que el ejecutable nuevo se puede instalar sucursal por sucursal. Las
+cajas viejas no cambian de comportamiento.
+
+---
+
 ## 2026-09-11 - Voucher mayorista con los datos del cliente
 
 ### Contexto

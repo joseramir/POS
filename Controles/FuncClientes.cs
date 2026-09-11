@@ -312,6 +312,9 @@ namespace Controles
                     cmd.Parameters.AddWithValue("@psaldoMut", cli.SaldoMutual);
                     cmd.Parameters.AddWithValue("@pusadoMut", cli.UsadoMutual);
                     cmd.Parameters.AddWithValue("@pcod", cli.Cod);
+                    // Sin @prepa el SP solo descuenta si el cliente tiene UNA reparticion: con
+                    // dos o mas no descontaba nada y el saldocaja se podia volver a usar.
+                    cmd.Parameters.AddWithValue("@prepa", cli.Repa > 0 ? (int)cli.Repa : -1);
                     aux = cmd.ExecuteNonQuery() == 1;
                     con.Close();
                 }
@@ -331,6 +334,13 @@ namespace Controles
 
         public static string LeeSaldoPromoCli(long pcod)
         {
+            return LeeSaldoPromoCli(pcod, -1);
+        }
+
+        //   Saldo de caja del cliente en la reparticion del ticket. Sin reparticion (prepa <= 0)
+        //   usa el SP viejo, que con varias reparticiones devuelve una fila cualquiera.
+        public static string LeeSaldoPromoCli(long pcod, int prepa)
+        {
             string aux = "0.00";
             try
             {
@@ -340,8 +350,10 @@ namespace Controles
                     SqlCommand cmd = con.CreateCommand();
                     //cmd.CommandText = "select saldocaja from clientes where cod = @cod;";
                     cmd.CommandType = CommandType.StoredProcedure;
-                    cmd.CommandText = "spLeeSaldoPromoCli";
+                    cmd.CommandText = prepa > 0 ? "spLeeSaldoPromoCliRepa" : "spLeeSaldoPromoCli";
                     cmd.Parameters.AddWithValue("@pcod", pcod);
+                    if (prepa > 0)
+                        cmd.Parameters.AddWithValue("@prepa", prepa);
 
                     SqlDataReader rdr = cmd.ExecuteReader();
                     if (rdr.HasRows)

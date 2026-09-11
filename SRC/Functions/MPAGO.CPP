@@ -4146,7 +4146,7 @@ void LeeSaldoConsumo()
 			WriteBootLog("No puedo abrir archivos de CC para leer Saldo Promo");
 			return;
 		}
-		System::String ^csaldopromo = Controles::FuncClientes::LeeSaldoPromoCli(Dump::actCliente->Cod);
+		System::String ^csaldopromo = Controles::FuncClientes::LeeSaldoPromoCli(Dump::actCliente->Cod, Dump::actCliente->Repa);
 		Strings::StringToChar(csaldopromo, c_saldopromo, 20);
 
 		sprintf(lmsg, "Saldo Promo del cliente %s", c_saldopromo);
