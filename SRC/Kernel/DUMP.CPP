@@ -75,6 +75,7 @@ void ReprocActualTran(void);
 void PrintActualTran(void);
 void ResetPOSAcum(void);
 void ResetPOSAcumInternal(void);
+void PublicarVoucherCC(bool vaciar);				// mpago.cpp
 
 int enviaTransSql(int);
 void MostrarMayorEnPantalla();//en Factu.cpp esta el metodo
@@ -2830,6 +2831,7 @@ void ResetPOSAcumInternal()
 	c_numero[0] = c_fecha[0] = c_nombre[0] = c_dni[0] = c_telef[0] = c_direcc[0] = 
 		 c_localidad[0] = c_cod[0] = c_condiva[0] = 0;	
 	leyendaFinde[0] = 0;
+	PublicarVoucherCC(true);		// Sino los vouchers arrastran el cliente de la venta anterior
 
 	baplipercep = false;
 	baplitissh = false;

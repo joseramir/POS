@@ -5,6 +5,53 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-11 - Voucher mayorista con los datos del cliente
+
+### Contexto
+
+Pedido como extensión del HU03: el voucher de la promo mayorista (`[voucher170]` de
+`mensajes.ini`) tenía líneas en blanco para completar a mano. Ahora se completa solo con los
+datos del cliente identificado en la venta. Por ahora es solo para la repartición 17; si gusta,
+se extiende al resto.
+
+La plantilla ya podía usar las variables `@CC_*@` (las publica `LeeCCDatos()` al elegir el
+cliente), pero había tres problemas:
+
+1. **Las variables de voucher no se vaciaban nunca.** Son globales y guardan el último valor,
+   así que un voucher de un ticket sin cliente salía con los datos del cliente de una venta
+   anterior de la misma corrida. Ya pasaba con el voucher 20 de cobranza de cuenta corriente.
+2. **Al reprocesar el dump y en la caja cobradora no se publicaban**: ahí `LeeCCDatos()` no
+   corre (el cliente se reconstruye desde el registro `func=2 / nro=9999`), y el voucher salía
+   vacío o con el cliente de otra venta.
+3. **No había variable para el email**, aunque `spGetCliente` ya lo trae.
+
+### Cambios
+
+1. `MPAGO.CPP`: función nueva `PublicarVoucherCC(bool vaciar)`, con el bloque que antes estaba
+   dentro de `LeeCCDatos()` más la variable nueva **`@CC_EMAIL@`**. Con `vaciar=true` publica
+   todas vacías.
+2. `LeeCCDatos()`: guarda el email del cliente y llama a `PublicarVoucherCC(false)`.
+3. `ProcMpag()`, bloque 9999: vuelve a publicar las variables desde el registro (y copia
+   `c_dnicompr` / `c_nomcompr` igual que `LeeCCDatos()`). El email no viaja en el registro: al
+   reprocesar y en la cobradora sale vacío.
+4. `DUMP.CPP`, `ResetPOSAcumInternal()`: llama a `PublicarVoucherCC(true)` en cada ticket.
+
+### Configuración (no versionada: `bin/` está ignorado)
+
+- `mensajes.ini`, `[voucher170]`: las líneas en blanco pasan a `@CC_COD@`, `@CC_NOM@`,
+  `@CC_CUIT@`, `@CC_DIREC@`, `@CC_LOCAL@`, `@CC_TELEF@`, `@CC_EMAIL@` y `@TICK_NRO@`.
+- La promo que emite el voucher 170 tiene que tener **`marcacli = 17`** para que solo se aplique
+  al cliente mayorista.
+
+### A tener en cuenta
+
+- No hay nombre y apellido por separado: el padrón trae solo la razón social (`rs`).
+- `@CC_DNI@` es el código del cliente (el POS asume COD == DNI), por eso la plantilla usa
+  `@CC_COD@`.
+- Razón social, dirección y localidad vienen cortadas a 30 caracteres; el email no se corta.
+
+---
+
 ## 2026-09-04 - Arqueo remoto: la caja se tildaba leyendo el archivo de otra caja
 
 ### Contexto

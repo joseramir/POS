@@ -687,6 +687,46 @@ void SetTipoIvaDoc()
 	Dump::docActual->mTipoIva->Descripcion = gcnew String(des);
 }
 
+//   Email del cliente, solo para el voucher. No viaja en el registro 9999 del dump: al
+//   reprocesar y en la cobradora queda vacio.
+static char c_email[60] = "";
+
+//   Nombres de las variables de voucher con datos del cliente.
+static char *nomVoucherCC[] = { "@CC_COD@", "@CC_DNI@", "@CC_NOM@", "@CC_CUIT@", "@CC_COND@",
+	"@CC_SALMAX@", "@CC_SALDO@", "@CC_DIREC@", "@CC_TELEF@", "@CC_LOCAL@", "@CC_DNICOMP@",
+	"@CC_NOMCOMP@", "@CC_EMAIL@" };
+
+//   Publica los datos del cliente en las variables de voucher (@CC_*@). Las variables de
+//   voucher son globales y guardan el ultimo valor: si no se vacian en cada ticket, un voucher
+//   sale con el cliente de una venta anterior. Se llama al identificar al cliente
+//   (LeeCCDatos), al procesar su registro 9999 (tambien al reprocesar el dump y en la
+//   cobradora) y con vaciar=true al resetear el ticket.
+void PublicarVoucherCC(bool vaciar)
+{
+	if(vaciar)
+	{
+		c_email[0] = 0;
+		for(int i = 0; i < (int)(sizeof(nomVoucherCC) / sizeof(nomVoucherCC[0])); i++)
+			VoucherVar(nomVoucherCC[i], "");
+		return;
+	}
+
+	char tempBuff[500], *t;
+	t = Trim(c_cod, tempBuff);       VoucherVar("@CC_COD@",     t);
+	t = Trim(c_dni, tempBuff);       VoucherVar("@CC_DNI@",     t);
+	t = Trim(c_nombre, tempBuff);    VoucherVar("@CC_NOM@",     t);
+	t = Trim(c_numero, tempBuff);    VoucherVar("@CC_CUIT@",    t);
+	t = Trim(c_condiva, tempBuff);   VoucherVar("@CC_COND@",    t);
+	t = Trim(c_salmax, tempBuff);    VoucherVar("@CC_SALMAX@",  t);
+	t = Trim(c_saldo, tempBuff);     VoucherVar("@CC_SALDO@",   t);
+	t = Trim(c_direcc, tempBuff);    VoucherVar("@CC_DIREC@",   t);
+	t = Trim(c_telef, tempBuff);     VoucherVar("@CC_TELEF@",   t);
+	t = Trim(c_localidad, tempBuff); VoucherVar("@CC_LOCAL@",   t);
+	t = Trim(c_dnicompr, tempBuff);  VoucherVar("@CC_DNICOMP@", t);
+	t = Trim(c_nomcompr, tempBuff);  VoucherVar("@CC_NOMCOMP@", t);
+	t = Trim(c_email, tempBuff);     VoucherVar("@CC_EMAIL@",   t);
+}
+
 //   Lee los archivos de datos de cuenta corriente y los carga en las variables internas
 void LeeCCDatos()
 {
@@ -783,21 +823,15 @@ void LeeCCDatos()
 		c_PorceMax = 100;
 	}
 
+	//   El email no viaja en el registro 9999 del dump: se guarda aparte para el voucher.
+	if(Dump::actCliente->Email != nullptr)
+		Strings::StringToChar(Dump::actCliente->Email, c_email, 50);
+	else
+		c_email[0] = 0;
+
 	//   Pone todos los datos del cliente en variables de vouchers, para que puedan
 	//   ser utilizados a discrecion.
-	char tempBuff[500], *t;
-	t = Trim(c_cod, tempBuff);       VoucherVar("@CC_COD@",     t);
-	t = Trim(c_dni, tempBuff);       VoucherVar("@CC_DNI@",     t);
-	t = Trim(c_nombre, tempBuff);    VoucherVar("@CC_NOM@",     t);
-	t = Trim(c_numero, tempBuff);    VoucherVar("@CC_CUIT@",    t);
-	t = Trim(c_condiva, tempBuff);   VoucherVar("@CC_COND@",    t);
-	t = Trim(c_salmax, tempBuff);    VoucherVar("@CC_SALMAX@",  t);
-	t = Trim(c_saldo, tempBuff);     VoucherVar("@CC_SALDO@",   t);
-	t = Trim(c_direcc, tempBuff);    VoucherVar("@CC_DIREC@",   t);
-	t = Trim(c_telef, tempBuff);     VoucherVar("@CC_TELEF@",   t);
-	t = Trim(c_localidad, tempBuff); VoucherVar("@CC_LOCAL@",   t);
-	t = Trim(c_dnicompr, tempBuff);  VoucherVar("@CC_DNICOMP@", t);
-	t = Trim(c_nomcompr, tempBuff);  VoucherVar("@CC_NOMCOMP@", t);
+	PublicarVoucherCC(false);
 
 	if (Dump::docActual == nullptr)
 		Dump::docActual = gcnew LibEntidades::Alberdi::HeaderDoc();
@@ -2892,6 +2926,13 @@ void ProcMpag(void *mpg_, int fwrite)
 			GlobalCCSelected = 1;
 			mpg->uOnline = 0;
 			ClienteBenef = mpg->reparticion;
+
+			//   Variables de voucher del cliente: al reprocesar el dump y en la cobradora
+			//   LeeCCDatos() no corre, y el voucher de la promo mayorista salia vacio o con el
+			//   cliente de otra venta. Se publican desde el registro, igual que LeeCCDatos().
+			STRCPY(c_dnicompr, c_dni);
+			STRCPY(c_nomcompr, c_nombre);
+			PublicarVoucherCC(false);
 
 			//   El comprobante lo decide la condicion ante el IVA, SALVO que el cajero haya
 			//   elegido ticket comun para el cliente mayorista. Esa eleccion viaja en el propio
