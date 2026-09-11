@@ -5,6 +5,66 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-11 - Cliente mayorista: el cajero elige la repartición
+
+### Contexto
+
+Un cliente puede tener varias reparticiones (`CLIENTE_REPARTICION`) y `spGetCliente` devuelve una
+sola, elegida por ranking: primero la que tiene día en el `Calendario` para hoy, después la de
+mayor `SALDOCAJA`. La 17 (Cliente Mayorista) no tiene filas en el calendario y arranca con saldo
+0, así que casi siempre perdía: un cliente 9+17 (Mutual Comodín + mayorista) entraba como 9 y no
+podía pedir el ticket común del HU03.
+
+Pedido: si el cliente tiene la 17, la caja muestra sus reparticiones y el cajero elige.
+Definiciones del usuario (2026-09-11):
+
+- Preseleccionada la 17.
+- Sin la 17, todo sigue automático como hasta ahora (`spGetCliente` sin cambios).
+- `CODIGO_MAYORISTA` no se muestra.
+- La lista respeta el calendario: una repartición con filas en `Calendario` solo se ofrece en
+  sus días (`TIPO 'M'` = todos los días); una sin filas (como la 17) se ofrece siempre.
+
+### Cambios
+
+1. **SQL (base productiva, creado el 2026-09-11):** SP nuevo `spGetClienteRepas @pcod, @Fecha`,
+   una fila por repartición que se puede ofrecer en la fecha, con las mismas columnas que
+   `spGetCliente`. Los SP existentes no se tocaron.
+2. `Controles/FuncClientes.cs`: `BuscaReparticionesCliente(cod)` nueva (devuelve `null` si falla).
+   El armado de la fila se extrajo a `LeeCliente(rdr)`, que ahora usan `BuscaClientePorCod` y la
+   función nueva.
+3. `MPAGO.CPP`, `vCCcod()`: después de `spGetCliente` pide la lista; si trae la 17, deja esa fila
+   en `Dump::actCliente` y, si hay más de una, la lista en `Dump::repasCliente` (nuevo, en
+   `StaticDump.h`). Sin la 17, o si la consulta falla, no cambia nada.
+4. `MpagCliente.h`: combo `cbRepa` en el lugar de la etiqueta de la repartición, visible solo con
+   lista. Se elige tocándolo o con la tecla **R** (pasa a la siguiente). Al cambiar, el cliente
+   pasa a ser el de esa fila y `LeeCCDatos()` recalcula la repartición (`ClienteBenef`), el saldo
+   de caja y las variables de voucher; el check de ticket común solo queda con la 17.
+
+Todo lo demás toma la repartición elegida sin cambios: el registro 9999 (SAP, cobradora,
+reproceso), las promos por repartición, el saldo de caja (lectura y descuento, ver la entrada
+anterior) y la Mutual Comodín (solo con la 9).
+
+### De paso: clientes que la caja no podía identificar
+
+Al probar con un cliente de la repartición 17, `ErrorSql.txt` mostró que `BuscaClientePorCod`
+fallaba con "No se puede convertir un objeto DBNull": el cliente tenía NULL en `SALDOMUT`,
+`USADOMUT` y `NOPERCEPIVA`, la conversión reventaba y la caja decía que la cuenta no existe.
+No era de este cambio: el mismo código ya estaba antes dentro de `BuscaClientePorCod`, y
+`BuscaClientePorNom` tenía las mismas líneas.
+
+Medido el 2026-09-11: NULL en `SALDOMUT` / `USADOMUT` / `NOPERCEPIVA` en 20 clientes, en
+`PERCEPCION` en 40 y en `PERTISSH` en 47. Ahora, en los dos mapeos, un NULL vale 0 / false /
+'N' (sin percepción marcada, sin mutual, y la percepción de IVA se evalúa como en cualquier
+cliente). Los datos de la base no se tocaron.
+
+### A tener en cuenta
+
+- Cada identificación de cliente hace una consulta más al SQL (la lista).
+- Si el cliente tiene la 17 y ninguna otra repartición que se pueda ofrecer ese día, no aparece
+  el combo pero igual queda la 17 (antes el ranking podía elegir otra).
+
+---
+
 ## 2026-09-11 - Saldo de caja: con varias reparticiones no se descontaba
 
 ### Contexto

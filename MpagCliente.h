@@ -5,6 +5,8 @@
 #include "BuscaCliSql.h"
 #include "StaticDump.h"
 
+void LeeCCDatos();				// mpago.cpp
+
 using namespace System;
 using namespace System::Windows::Forms;
 using namespace System::Drawing;
@@ -46,6 +48,8 @@ namespace pos {
 	private: System::Windows::Forms::Label^  lblMessagePercep;
 	private: System::Windows::Forms::Label^  lblReparticion;
 	private: System::Windows::Forms::CheckBox^  chkTicketComun;
+	private: System::Windows::Forms::ComboBox^  cbRepa;
+	private: bool cargandoRepas;
 	private: System::Windows::Forms::TextBox^  tbSaldo;
 	private: System::Windows::Forms::Label^  label15;
 	private: System::Windows::Forms::Label^  label16;
@@ -68,6 +72,8 @@ namespace pos {
 			chkTicketComun->Visible = false;
 			chkTicketComun->Checked = false;
 			CCTicketComun = false;
+			cbRepa->Visible = false;
+			cargandoRepas = false;
 
 			// Elimina los botones en configuraciones sin touchscreen
 			if(!usaTouch)
@@ -126,6 +132,12 @@ namespace pos {
 			case Keys::X:
 				if(this->chkTicketComun->Visible)
 					this->chkTicketComun->Checked = !this->chkTicketComun->Checked;
+				break;
+
+			//   Pasa a la siguiente reparticion del cliente mayorista. Solo con el combo visible.
+			case Keys::R:
+				if(this->cbRepa->Visible && this->cbRepa->Items->Count > 0)
+					this->cbRepa->SelectedIndex = (this->cbRepa->SelectedIndex + 1) % this->cbRepa->Items->Count;
 				break;
 
 			case Keys::Enter:
@@ -213,6 +225,7 @@ namespace pos {
 			this->label15 = (gcnew System::Windows::Forms::Label());
 			this->lblReparticion = (gcnew System::Windows::Forms::Label());
 			this->chkTicketComun = (gcnew System::Windows::Forms::CheckBox());
+			this->cbRepa = (gcnew System::Windows::Forms::ComboBox());
 			this->lblMessagePercep = (gcnew System::Windows::Forms::Label());
 			this->tbAlicuota = (gcnew System::Windows::Forms::TextBox());
 			this->label14 = (gcnew System::Windows::Forms::Label());
@@ -293,6 +306,7 @@ namespace pos {
 			this->panel1->Controls->Add(this->tbSaldo);
 			this->panel1->Controls->Add(this->label15);
 			this->panel1->Controls->Add(this->lblReparticion);
+			this->panel1->Controls->Add(this->cbRepa);
 			this->panel1->Controls->Add(this->chkTicketComun);
 			this->panel1->Controls->Add(this->lblMessagePercep);
 			this->panel1->Controls->Add(this->tbAlicuota);
@@ -375,6 +389,19 @@ namespace pos {
 			this->chkTicketComun->Text = L"Ticket comun (X)";
 			this->chkTicketComun->UseVisualStyleBackColor = true;
 			this->chkTicketComun->Visible = false;
+			//
+			// cbRepa
+			//
+			this->cbRepa->DropDownStyle = System::Windows::Forms::ComboBoxStyle::DropDownList;
+			this->cbRepa->Font = (gcnew System::Drawing::Font(L"Tahoma", 9.75F, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point,
+				static_cast<System::Byte>(0)));
+			this->cbRepa->ForeColor = System::Drawing::Color::Blue;
+			this->cbRepa->Location = System::Drawing::Point(228, 3);
+			this->cbRepa->Name = L"cbRepa";
+			this->cbRepa->Size = System::Drawing::Size(198, 24);
+			this->cbRepa->TabIndex = 41;
+			this->cbRepa->Visible = false;
+			this->cbRepa->SelectedIndexChanged += gcnew System::EventHandler(this, &MpagCliente::cbRepa_SelectedIndexChanged);
 			//
 			// lblMessagePercep
 			//
@@ -854,6 +881,7 @@ namespace pos {
 					this->tbPercepcion->Text = CuentaCorriente::Percepcion;
 					
 					this->lblReparticion->Text = CuentaCorriente::RepaDes;
+					CargarReparticiones();
 
 					//   Solo el cliente mayorista puede pedir ticket comun en lugar del
 					//   ticket factura que sale automaticamente por su condicion ante el IVA.
@@ -916,11 +944,58 @@ namespace pos {
 					this->lblMessagePercep->Visible = false;
 					this->chkTicketComun->Visible = false;
 					this->chkTicketComun->Checked = false;
+					OcultarReparticiones();
 				}
 			}
 			else			
 				this->btOk->Enabled = false;			
 			
+		}
+
+		//   Combo de reparticiones del cliente mayorista (Dump::repasCliente, lo carga vCCcod):
+		//   solo aparece si el cliente tiene la 17 y otra que se le pueda ofrecer hoy. Arranca en
+		//   la que dejo vCCcod en Dump::actCliente, que es la 17.
+		void CargarReparticiones()
+		{
+			cargandoRepas = true;
+			cbRepa->Items->Clear();
+			if (Dump::repasCliente != nullptr)
+			{
+				int sel = 0;
+				for (int i = 0; i < Dump::repasCliente->Count; i++)
+				{
+					Controles::ClienteSql ^r = Dump::repasCliente[i];
+					cbRepa->Items->Add(r->Repa.ToString() + " - " + r->RepaDes->Trim());
+					if (r == Dump::actCliente)
+						sel = i;
+				}
+				cbRepa->SelectedIndex = sel;
+			}
+			cargandoRepas = false;
+			cbRepa->Visible = (Dump::repasCliente != nullptr);
+			lblReparticion->Visible = !cbRepa->Visible;
+		}
+
+		void OcultarReparticiones()
+		{
+			cbRepa->Visible = false;
+			lblReparticion->Visible = true;
+		}
+
+		//   El cajero cambio la reparticion: el cliente pasa a ser el de esa fila (mismos datos,
+		//   otra reparticion y otro saldo de caja) y LeeCCDatos() recalcula ClienteBenef, el
+		//   saldo de caja y las variables de voucher.
+		System::Void cbRepa_SelectedIndexChanged(System::Object^ sender, System::EventArgs^ e)
+		{
+			if (cargandoRepas || Dump::repasCliente == nullptr || cbRepa->SelectedIndex < 0)
+				return;
+			Dump::actCliente = Dump::repasCliente[cbRepa->SelectedIndex];
+			LeeCCDatos();
+			this->lblReparticion->Text = CuentaCorriente::RepaDes;
+			this->tbSaldo->Text = Strings::CharToString(c_saldopromo);
+			this->chkTicketComun->Checked = false;
+			this->chkTicketComun->Visible = (!inOper && Dump::actCliente->Repa == REPA_MAYORISTA);
+			WLog("Reparticion elegida por el cajero: %d", (int)ClienteBenef);
 		}
 
 		System::Void btBusca_Click(System::Object^ sender, System::EventArgs^  e)
@@ -968,6 +1043,7 @@ namespace pos {
 		{
 			STRCPY(c_condiva, "");
 			ClienteBenef = 0;
+			Dump::repasCliente = nullptr;
 			CCTicketComun = false;
 			BaseDialog::Cancel_Click(sender, e);
 		}

@@ -61,48 +61,7 @@ namespace Controles
                     if (rdr.HasRows)
                     {
                         rdr.Read();
-                        aux = new ClienteSql();
-                        aux.Cod = Convert.ToInt64(rdr["cod"]);
-                        aux.Nombre = rdr["rs"].ToString();
-                        aux.Direccion = rdr["direcc"].ToString();
-                        aux.Localidad = rdr["localidad"].ToString();
-                        aux.Civa = Convert.ToInt16(rdr["civa"]);
-                        aux.Cuit = rdr["cuit"].ToString();
-                        aux.Telefono = rdr["telefono"].ToString();
-                        aux.Saldo = Convert.ToDecimal(rdr["saldo"]);
-                        aux.SalMax = Convert.ToDecimal(rdr["salmax"]);
-                        aux.Grupo = Convert.ToInt16(rdr["grupo"]);
-                        aux.Estado = Convert.ToChar(rdr["estado"]);
-                        aux.Lista = Convert.ToInt16(rdr["lista"]);
-                        aux.Consumo = Convert.ToDecimal(rdr["consumo"]);
-                        aux.Porcemax = Convert.ToDecimal(rdr["porcemax"]);
-                        aux.Percepcion = Convert.ToChar(rdr["percepcion"]);
-                        aux.Alicuota = Convert.ToDecimal(rdr["alicuota"]);
-                        aux.Fecha_pib = Convert.ToDateTime(rdr["fecha_pib"]);
-                        aux.CodPostal = Convert.ToInt32(rdr["codpostal"]);
-                        aux.PerTissh = Convert.ToChar(rdr["pertissh"]);
-                        aux.AliTissh = Convert.ToDecimal(rdr["alitissh"]);
-                        aux.Pyme = Convert.ToChar(rdr["pyme"]);
-                        aux.Email = rdr["email"].ToString();
-                        aux.Repa = Convert.ToInt16(rdr["repa"]);
-                        aux.SaldoCaja = Convert.ToDecimal(rdr["saldocaja"]);
-                        aux.RepaDes = rdr["descrip"].ToString();
-                        aux.Bloqueado = Convert.ToBoolean(rdr["bloqueado"]);
-                        try
-                        {
-                            int colIndex = rdr.GetOrdinal("FecNac");
-                            if (rdr.IsDBNull(colIndex))
-                                aux.FechaNacimiento = new DateTime(1810, 5, 25);
-                            else
-                                aux.FechaNacimiento = Convert.ToDateTime(rdr["FecNac"]);
-                        }
-                        catch (Exception)
-                        {
-                            aux.FechaNacimiento = new DateTime(1810, 5, 25);
-                        }
-                        aux.SaldoMutual = Convert.ToDecimal(rdr["saldoMut"]);
-                        aux.UsadoMutual = Convert.ToBoolean(rdr["usadoMut"]);
-                        aux.NoPercepIVA = Convert.ToBoolean(rdr["NoPercepIVA"]);
+                        aux = LeeCliente(rdr);
                     }
                     rdr.Close();
                     con.Close();
@@ -119,6 +78,96 @@ namespace Controles
                 writer.Close();
             }
             return aux;
+        }
+
+        //   Arma un ClienteSql con la fila actual del reader (columnas de spGetCliente y de
+        //   spGetClienteRepas, que son las mismas).
+        private static ClienteSql LeeCliente(SqlDataReader rdr)
+        {
+            ClienteSql aux = new ClienteSql();
+            aux.Cod = Convert.ToInt64(rdr["cod"]);
+            aux.Nombre = rdr["rs"].ToString();
+            aux.Direccion = rdr["direcc"].ToString();
+            aux.Localidad = rdr["localidad"].ToString();
+            aux.Civa = Convert.ToInt16(rdr["civa"]);
+            aux.Cuit = rdr["cuit"].ToString();
+            aux.Telefono = rdr["telefono"].ToString();
+            aux.Saldo = Convert.ToDecimal(rdr["saldo"]);
+            aux.SalMax = Convert.ToDecimal(rdr["salmax"]);
+            aux.Grupo = Convert.ToInt16(rdr["grupo"]);
+            aux.Estado = Convert.ToChar(rdr["estado"]);
+            aux.Lista = Convert.ToInt16(rdr["lista"]);
+            aux.Consumo = Convert.ToDecimal(rdr["consumo"]);
+            aux.Porcemax = Convert.ToDecimal(rdr["porcemax"]);
+            //   Columnas que admiten NULL en clientes: un NULL hacia fallar la conversion y el
+            //   cliente quedaba como inexistente. PERCEPCION, PERTISSH, SALDOMUT, USADOMUT y
+            //   NOPERCEPIVA ya tienen NULL en la base (ver el CHANGELOG del 2026-09-11).
+            aux.Percepcion = rdr["percepcion"] is DBNull ? 'N' : Convert.ToChar(rdr["percepcion"]);
+            aux.Alicuota = Convert.ToDecimal(rdr["alicuota"]);
+            aux.Fecha_pib = Convert.ToDateTime(rdr["fecha_pib"]);
+            aux.CodPostal = Convert.ToInt32(rdr["codpostal"]);
+            aux.PerTissh = rdr["pertissh"] is DBNull ? 'N' : Convert.ToChar(rdr["pertissh"]);
+            aux.AliTissh = Convert.ToDecimal(rdr["alitissh"]);
+            aux.Pyme = Convert.ToChar(rdr["pyme"]);
+            aux.Email = rdr["email"].ToString();
+            aux.Repa = Convert.ToInt16(rdr["repa"]);
+            aux.SaldoCaja = Convert.ToDecimal(rdr["saldocaja"]);
+            aux.RepaDes = rdr["descrip"].ToString();
+            aux.Bloqueado = Convert.ToBoolean(rdr["bloqueado"]);
+            try
+            {
+                int colIndex = rdr.GetOrdinal("FecNac");
+                if (rdr.IsDBNull(colIndex))
+                    aux.FechaNacimiento = new DateTime(1810, 5, 25);
+                else
+                    aux.FechaNacimiento = Convert.ToDateTime(rdr["FecNac"]);
+            }
+            catch (Exception)
+            {
+                aux.FechaNacimiento = new DateTime(1810, 5, 25);
+            }
+            aux.SaldoMutual = rdr["saldoMut"] is DBNull ? 0 : Convert.ToDecimal(rdr["saldoMut"]);
+            aux.UsadoMutual = rdr["usadoMut"] is DBNull ? false : Convert.ToBoolean(rdr["usadoMut"]);
+            aux.NoPercepIVA = rdr["NoPercepIVA"] is DBNull ? false : Convert.ToBoolean(rdr["NoPercepIVA"]);
+            return aux;
+        }
+
+        //   Reparticiones del cliente que se le pueden ofrecer hoy (spGetClienteRepas: mismos
+        //   filtros que spGetCliente y ademas respeta el Calendario), una por fila, cada una
+        //   como un ClienteSql completo. Devuelve null si hubo error: la caja sigue con lo que
+        //   trajo spGetCliente.
+        public static List<ClienteSql> BuscaReparticionesCliente(string pcod)
+        {
+            List<ClienteSql> lista = null;
+            try
+            {
+                using (SqlConnection con = new SqlConnection(ConfigurationManager.ConnectionStrings["dbsuper"].ConnectionString))
+                {
+                    con.Open();
+                    SqlCommand cmd = con.CreateCommand();
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.CommandText = "spGetClienteRepas";
+                    cmd.Parameters.AddWithValue("@pcod", pcod);
+                    SqlDataReader rdr = cmd.ExecuteReader();
+                    lista = new List<ClienteSql>();
+                    while (rdr.Read())
+                        lista.Add(LeeCliente(rdr));
+                    rdr.Close();
+                    con.Close();
+                }
+            }
+            catch (System.Exception ex)
+            {
+                lista = null;
+                StreamWriter writer = File.AppendText("ErrorSql.txt");
+                String fhdatos = String.Format("{0} - Error capturado en funcion {1}", DateTime.Now, "BuscaReparticionesCliente");
+                writer.WriteLine(fhdatos);
+                writer.WriteLine("Mensaje: " + ex.Message);
+                writer.WriteLine("StackTrace: " + ex.StackTrace);
+                writer.WriteLine("----------------------------------");
+                writer.Close();
+            }
+            return lista;
         }
 
         public static List<ClienteSql> BuscaClientePorNom(string pnom)
@@ -153,11 +202,11 @@ namespace Controles
                         aux.Lista = Convert.ToInt16(rdr["lista"]);
                         aux.Consumo = Convert.ToDecimal(rdr["consumo"]);
                         aux.Porcemax = Convert.ToDecimal(rdr["porcemax"]);
-                        aux.Percepcion = Convert.ToChar(rdr["percepcion"]);
+                        aux.Percepcion = rdr["percepcion"] is DBNull ? 'N' : Convert.ToChar(rdr["percepcion"]);
                         aux.Alicuota = Convert.ToDecimal(rdr["alicuota"]);
                         aux.Fecha_pib = Convert.ToDateTime(rdr["fecha_pib"]);
                         aux.CodPostal = Convert.ToInt32(rdr["codpostal"]);
-                        aux.PerTissh = Convert.ToChar(rdr["pertissh"]);
+                        aux.PerTissh = rdr["pertissh"] is DBNull ? 'N' : Convert.ToChar(rdr["pertissh"]);
                         aux.AliTissh = Convert.ToDecimal(rdr["alitissh"]);
                         aux.Pyme = Convert.ToChar(rdr["pyme"]);
                         aux.Email = rdr["email"].ToString();
@@ -177,9 +226,9 @@ namespace Controles
                         {
                             aux.FechaNacimiento = new DateTime(1810, 5, 25);
                         }
-                        aux.SaldoMutual = Convert.ToDecimal(rdr["saldoMut"]);
-                        aux.UsadoMutual = Convert.ToBoolean(rdr["usadoMut"]);
-                        aux.NoPercepIVA = Convert.ToBoolean(rdr["NoPercepIVA"]);
+                        aux.SaldoMutual = rdr["saldoMut"] is DBNull ? 0 : Convert.ToDecimal(rdr["saldoMut"]);
+                        aux.UsadoMutual = rdr["usadoMut"] is DBNull ? false : Convert.ToBoolean(rdr["usadoMut"]);
+                        aux.NoPercepIVA = rdr["NoPercepIVA"] is DBNull ? false : Convert.ToBoolean(rdr["NoPercepIVA"]);
 
                         lista.Add(aux);
                     }

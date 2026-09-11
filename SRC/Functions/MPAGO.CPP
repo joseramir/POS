@@ -882,6 +882,27 @@ int vCCcod(char *p, void *bag)
 		return 0;
 	}
 
+	//   Cliente mayorista: si entre las reparticiones que se le pueden ofrecer hoy esta la 17,
+	//   queda preseleccionada (en lugar de la que elige el ranking de spGetCliente) y, si hay
+	//   mas de una, MpagCliente muestra el combo para que el cajero elija. Sin la 17 sigue todo
+	//   como hasta ahora. Si la consulta falla, BuscaReparticionesCliente devuelve nullptr.
+	Dump::repasCliente = nullptr;
+	System::Collections::Generic::List<Controles::ClienteSql ^> ^repas =
+		Controles::FuncClientes::BuscaReparticionesCliente(gcnew String(mycod));
+	if (repas != nullptr)
+	{
+		for (int i = 0; i < repas->Count; i++)
+		{
+			if (repas[i]->Repa == REPA_MAYORISTA)
+			{
+				Dump::actCliente = repas[i];
+				if (repas->Count > 1)
+					Dump::repasCliente = repas;
+				break;
+			}
+		}
+	}
+
 	LeeCCDatos();
 
 	char *mmsg = new char[100];

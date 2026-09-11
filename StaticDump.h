@@ -35,6 +35,9 @@ public:
 	//static LibEntidades::Janis::PedidoPos^ PedidoJanis = nullptr;
 	
 	static Controles::ClienteSql^ actCliente = nullptr;
+	//   Reparticiones que el cajero puede elegir para el cliente mayorista: la 17 y las demas
+	//   que se le pueden ofrecer hoy. nullptr si no corresponde elegir. La carga vCCcod().
+	static List<Controles::ClienteSql ^> ^repasCliente = nullptr;
 	static List<Controles::VendedorMayor ^> ^ListadoVendedoresMay = gcnew List<Controles::VendedorMayor ^>();
 
 	static LibEntidades::Alberdi::HeaderDoc ^docActual = nullptr;
