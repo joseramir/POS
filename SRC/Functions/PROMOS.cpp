@@ -618,7 +618,11 @@ void ProcPromo(void *d, int fwrite)
 		infoAplic->legacy = true;
 
 	if(fwrite) WriteDump(promo);
-	if (fwrite && Dump::docActual != nullptr)
+	// Tambien al reprocesar trans.dbf (fwrite=0): al reiniciar la caja y en PrecioMayor /
+	// MostrarMayorEnPantalla, que vacian docActual con ResetPOSAcumInternal, el comprobante
+	// se rearma desde cero, igual que los items en ProcPlu. Antes las promociones se perdian
+	// del envio al webapi. docActual no se crea aca: los items vienen antes y ya lo crearon.
+	if (Dump::docActual != nullptr)
 	{
 		LibEntidades::Alberdi::PromoAplicada ^miPromo = gcnew LibEntidades::Alberdi::PromoAplicada();
 		System::Decimal decValue = 0;
@@ -636,7 +640,12 @@ void ProcPromo(void *d, int fwrite)
 			System::Int32::TryParse(auxcodigo, auxIntCod);
 			miPromo->Descarga = auxIntCod;
 		}
-		miPromo->Hora = System::DateTime::Now;
+		// Al reprocesar vale la hora grabada en el renglon (HHMMSS), no la del reinicio.
+		long hhmmss = (long)promo->hora;
+		if (!fwrite && hhmmss >= 0 && hhmmss <= 235959 && (hhmmss / 100) % 100 < 60 && hhmmss % 100 < 60)
+			miPromo->Hora = System::DateTime::Today.Add(System::TimeSpan(hhmmss / 10000, (hhmmss / 100) % 100, hhmmss % 100));
+		else
+			miPromo->Hora = System::DateTime::Now;
 		Dump::docActual->Promociones->Add(miPromo);
 	}
 

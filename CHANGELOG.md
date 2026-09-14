@@ -5,6 +5,41 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-14 - Promociones: se perdían del comprobante al reprocesar el ticket
+
+### Contexto
+
+`ProcPromo` agregaba la `PromoAplicada` a `Dump::docActual` solo al grabar el renglón
+(`fwrite = 1`). El `HeaderDoc` que va al webapi de ventas se rearma desde cero cada vez que se
+reprocesa `trans.dbf`, y los ítems (`ProcPlu`) sí se vuelven a cargar, pero las promociones no.
+Pasaba en dos casos:
+
+- **Reinicio de la caja a mitad del ticket**, con alguna promo ya aplicada.
+- **Precio mayorista** (`PrecioMayor` / `MostrarMayorEnPantalla`, `FACTU.CPP`): llaman a
+  `ResetPOSAcumInternal`, que pone `docActual = nullptr`, y reprocesan el ticket. Si ya había
+  una promo, se perdía del comprobante aunque la caja no se hubiera reiniciado.
+
+En los dos casos el ticket llegaba al webapi sin promociones. Afecta a la entrada anterior
+(`VOUCHERC` informa la cantidad de vouchers).
+
+### Cambios
+
+`PROMOS.cpp`, `ProcPromo`:
+
+1. Agrega la `PromoAplicada` también con `fwrite = 0`, como `ProcPlu` con los ítems. No crea
+   `docActual`: los ítems están antes en el ticket y ya lo crearon.
+2. Al reprocesar, `Hora` sale de la hora grabada en el renglón (`hora`, HHMMSS) y no de la hora
+   del reproceso.
+3. El envío a SQL de la cobradora (`#ifdef FACTSQL`) sigue solo con `fwrite`.
+
+### A tener en cuenta
+
+- No hay duplicados: todo reproceso completo parte de `docActual` vacío (`ResetPOSAcumInternal`
+  o arranque de la caja). `IncorporeTicket` solo reprocesa los renglones que agrega.
+- Los pagos e impuestos del doc no se revisaron con este criterio.
+
+---
+
 ## 2026-09-14 - VOUCHERC informa la cantidad de vouchers al webapi de ventas
 
 ### Contexto
