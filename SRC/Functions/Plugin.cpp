@@ -252,7 +252,11 @@ ValuePtr F_VoucherC(ValuePtr args[])
 		}
 
 		sprintf(tmp, "%d", voucherNum);
-		RegisterPrize(1, tmp, "", "", false, 0);
+		// La cantidad de vouchers va en p2: ProcPromo la pasa a PromoAplicada.Cantidad
+		// (webapi de ventas) y queda en trans.dbf.
+		char tmpCant[12];
+		sprintf(tmpCant, "%d", voucherCant);
+		RegisterPrize(1, tmp, tmpCant, "", false, 0);
 	}
 
 	args[0]->SetType('B');

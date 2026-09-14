@@ -622,7 +622,10 @@ void ProcPromo(void *d, int fwrite)
 	{
 		LibEntidades::Alberdi::PromoAplicada ^miPromo = gcnew LibEntidades::Alberdi::PromoAplicada();
 		System::Decimal decValue = 0;
-		System::Decimal::TryParse(gcnew String(promo->cantpromo) == "0.000" ? gcnew String(promo->p2) :  gcnew String(promo->cantpromo), decValue);
+		// Premio 1/2 graban cantpromo vacio: ahi la cantidad (si hay) viene en p2
+		// (por ejemplo VOUCHERC, la cantidad de vouchers).
+		String ^cantPromoStr = gcnew String(promo->cantpromo);
+		System::Decimal::TryParse((cantPromoStr == "0.000" || cantPromoStr->Trim() == "") ? gcnew String(promo->p2) : cantPromoStr, decValue);
 		miPromo->Cantidad = decValue;
 		decValue = 0;
 		System::Decimal::TryParse(gcnew String(promo->preciouni) == "0.000" ? gcnew String(promo->p3) : gcnew String(promo->preciouni), decValue);

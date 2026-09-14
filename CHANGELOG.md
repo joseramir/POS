@@ -5,6 +5,38 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-14 - VOUCHERC informa la cantidad de vouchers al webapi de ventas
+
+### Contexto
+
+La promo "Voucher Mayorista UNILEVER" (`codpromo 20260914000001`) usa
+`accion = VOUCHERC(171, CNTA)`: imprime un voucher cada $150.000 de la lista 22. Se pidió
+mandar al webapi (`/api/ventas/comprobante`) cuántos vouchers se imprimieron.
+
+La `PromoAplicada` ya viajaba en el `HeaderDoc`, pero con `Cantidad = 0`: `F_VoucherC` grababa
+un solo renglón `RegisterPrize(1, "171", "", "")`, sin la cantidad, y `ProcPromo` solo miraba
+`p2` si `cantpromo` valía `"0.000"`. En un premio 1, `cantpromo` queda vacío.
+
+### Cambios
+
+1. `Plugin.cpp`, `F_VoucherC`: graba la cantidad de vouchers en `p2`. Queda también en
+   `trans.dbf` (columna `barrio`) y en `MDPromo.P2` de la cobradora.
+2. `PROMOS.cpp`, `ProcPromo`: `Cantidad` sale de `p2` cuando `cantpromo` es `"0.000"` **o está
+   vacío**. El resto de los premios 1 y 2 graba `p2` vacío y sigue mandando 0; los premios 3
+   usan `cantpromo`, sin cambios.
+
+De paso, la acción `VOUCHER` (un solo voucher, pasa por `F_VoucherC`) manda `Cantidad = 1`.
+
+### Limitaciones
+
+- Se cuentan los vouchers apilados, no los efectivamente impresos.
+- Preexistente: `ProcPromo` solo agrega la `PromoAplicada` al grabar el renglón, no al
+  reprocesar `trans.dbf`. Si la caja se reinicia con la promo ya aplicada y antes del cierre,
+  el webapi no recibe las promociones de ese ticket.
+- Falta confirmar que el webapi guarde `Cantidad` de las promociones.
+
+---
+
 ## 2026-09-14 - Voucher: la @ del email no se imprimía
 
 ### Contexto
