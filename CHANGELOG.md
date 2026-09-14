@@ -5,6 +5,34 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-14 - Voucher: la @ del email no se imprimía
+
+### Contexto
+
+El voucher 170 con los datos del cliente (entrada del 2026-09-11) imprimía el email sin la
+arroba: `juan@gmail.com` salía `juangmail.com`. No era el motor de vouchers: `ExpandVoucher`
+copia el valor de la variable tal cual. Lo borraba el driver de la Hasar PR250
+(`prnprot = hasarPR250`): `PrinterPR250::ChkDesP` toma toda `@` o `&` seguida de algo como un
+código de modo de impresión (`&4` = doble ancho), la descarta y solo reconoce el `4`.
+
+### Cambios
+
+1. `PrinterPr250.h` / `PPR250.cpp`: `ChkDesP` recibe `bool arrobaLiteral = false`. En `true` no
+   interpreta `@` ni `&` y los deja pasar como texto. Los demás llamados (ítems, encabezados,
+   pies) no cambian.
+2. `PPR250.cpp`, `PrintVoucher`: llama a `ChkDesP(aux, NULL, true)`. El `&4`/`@4` al comienzo
+   de la línea ya lo quitaba el bucle previo, así que las plantillas con doble ancho siguen
+   igual. Efecto de paso: un `&` en un dato del cliente (por ejemplo la razón social) ahora
+   también se imprime.
+
+### Limitaciones
+
+- Una `@4` o `&4` dentro del dato (un email `x@4dominio.com`) se sigue tomando como doble ancho.
+- Solo la PR250. `PTermica`, `EpsonTM220F` y los drivers viejos tienen el mismo filtro y no se
+  tocaron (no están en uso).
+
+---
+
 ## 2026-09-11 - Cliente mayorista: el cajero elige la repartición
 
 ### Contexto

@@ -94,7 +94,7 @@ unsigned long PrinterPR250::sgetdec(char **pc)     // Lee un nro expresado decim
 }
 
 // Chequea las descripciones. (Que sean ascii, que no tenga 'ñ', etc).
-char *PrinterPR250::ChkDesP(char *s, char *dst)
+char *PrinterPR250::ChkDesP(char *s, char *dst, bool arrobaLiteral)
 {
 	if(!_stricmp(s, "..."))
 		return " ";
@@ -106,8 +106,9 @@ char *PrinterPR250::ChkDesP(char *s, char *dst)
 	int maxLen = MAXLENCAR;
 	while(*s && (maxLen-- != 0))
 	{
-		// Caracteres de control?
-		if((*s == '@' || *s == '&') && (*(s + 1) != 0))
+		// Caracteres de control? Con arrobaLiteral (vouchers) la @ y el & se imprimen tal cual:
+		// el modo &4/@4 ya lo quito PrintVoucher y un email trae una @ que no es un modo.
+		if(!arrobaLiteral && (*s == '@' || *s == '&') && (*(s + 1) != 0))
 		{
 			if( *(s + 1) == '4')
 			{
@@ -1227,7 +1228,7 @@ int PrinterPR250::PrintVoucher(char *des)
 		aux[j] = 0;
 		aformato = 10;		
 	}
-	ChkDesP(aux, NULL);		
+	ChkDesP(aux, NULL, true);		
 	sprintf(txbuff, "\x49%c%02X%c%s%c0", SEP, aformato, SEP, aux, SEP);    
 	//xchgPkt(txbuff);
 	EnviaRecibePaquete(txbuff);

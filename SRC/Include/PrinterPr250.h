@@ -72,7 +72,7 @@ protected:
 	virtual void PrepareCommand(char *txbuff, char *tdes, double mult, double monto, double xtasa, char qual, int cajaBulto);
 	virtual char *HasarBrand(void);
 
-	virtual char *ChkDesP(char *src, char *dst);	// Chequea la validez de descripciones.
+	virtual char *ChkDesP(char *src, char *dst, bool arrobaLiteral = false);	// Chequea la validez de descripciones.
 	virtual char *ChkDesP2(char *src, char *dst);	// Chequea la validez de descripciones.
 	virtual bool ChkTextGran(char *s);
 };
