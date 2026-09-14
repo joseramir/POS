@@ -5,6 +5,33 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-14 - SyncWorker: limpieza del buffer y 409 como sincronizado
+
+### Contexto
+
+- `TicketSyncRepository.LimpiarSincronizados()` existía pero no se llamaba desde ningún lado:
+  `ticketsync.db` crecía sin límite.
+- Volvieron a aparecer comprobantes duplicados en el webapi. La solución de fondo es un índice
+  único por `seq` del lado del webapi, respondiendo **409** si el comprobante ya existe. Pero el
+  `SyncWorker` trataba todo 4xx como `ERROR_PERMANENTE` y lo anotaba en
+  `TicketsNoSincronizados.txt`: con el índice, cada reintento tras un timeout quedaba como error.
+
+### Cambios (`LibEntidades/Alberdi/Syncworker.cs`)
+
+1. `LimpiarSiCorresponde()`: en el primer ciclo y después una vez por día borra los
+   `SINCRONIZADO` con más de `DIAS_CONSERVAR_SINCRONIZADOS` (30) días. Los `PENDIENTE` y
+   `ERROR_PERMANENTE` no se tocan. Si falla, se loguea y se reintenta al día siguiente; nunca
+   frena la sincronización.
+2. `EnviarAlEndpoint()`: HTTP **409** se da por sincronizado (se loguea). Los demás 4xx siguen
+   yendo a `ERROR_PERMANENTE`.
+
+### Pendiente (webapi)
+
+Índice único por `seq` y responder 409 ante duplicado. Mientras el webapi no lo haga, el cambio
+2 no tiene efecto.
+
+---
+
 ## 2026-09-14 - Promociones: se perdían del comprobante al reprocesar el ticket
 
 ### Contexto

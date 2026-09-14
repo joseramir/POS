@@ -65,6 +65,12 @@ namespace LibEntidades.Alberdi
         /// </summary>
         private const string ARCHIVO_ALERTA = "TicketsNoSincronizados.txt";
 
+        /// <summary>
+        /// Días que se conservan en ticketsync.db los tickets ya sincronizados,
+        /// por si hay que reenviar o revisar un comprobante.
+        /// </summary>
+        private const int DIAS_CONSERVAR_SINCRONIZADOS = 30;
+
         // ----------------------------------------------------------------
         //  Estado interno
         // ----------------------------------------------------------------
@@ -73,6 +79,7 @@ namespace LibEntidades.Alberdi
         private Thread   _thread;
         private volatile bool _corriendo;
         private bool _hayErrorRed;   // flag para alternar intervalo
+        private DateTime _ultimaLimpieza = DateTime.MinValue;   // ver LimpiarSiCorresponde
 
         // ----------------------------------------------------------------
         //  Constructor
@@ -120,6 +127,16 @@ namespace LibEntidades.Alberdi
             {
                 try
                 {
+                    LimpiarSiCorresponde();
+                }
+                catch (Exception ex)
+                {
+                    // Nunca debe impedir que se sincronice.
+                    Loging.EscribeExcepcion("SyncWorker.LimpiarSiCorresponde", ex);
+                }
+
+                try
+                {
                     ProcesarLote();
                 }
                 catch (Exception ex)
@@ -131,6 +148,27 @@ namespace LibEntidades.Alberdi
                 TimeSpan espera = _hayErrorRed ? INTERVALO_BACKOFF : INTERVALO_NORMAL;
                 Thread.Sleep(espera);
             }
+        }
+
+        /// <summary>
+        /// Borra del buffer los tickets SINCRONIZADO con más de
+        /// DIAS_CONSERVAR_SINCRONIZADOS días. Corre en el primer ciclo y
+        /// después una vez por día: antes no se llamaba nunca y ticketsync.db
+        /// crecía sin límite. PENDIENTE y ERROR_PERMANENTE no se tocan.
+        /// </summary>
+        private void LimpiarSiCorresponde()
+        {
+            if (_ultimaLimpieza.Date == DateTime.Today)
+                return;
+
+            // Se marca antes de borrar: si falla, se reintenta mañana y no
+            // en cada ciclo de 30 segundos.
+            _ultimaLimpieza = DateTime.Now;
+
+            int borrados = _repo.LimpiarSincronizados(DIAS_CONSERVAR_SINCRONIZADOS);
+            Loging.EscribeMensaje(string.Format(
+                "SyncWorker: limpieza del buffer, {0} ticket(s) sincronizado(s) de mas de {1} dias borrado(s).",
+                borrados, DIAS_CONSERVAR_SINCRONIZADOS));
         }
 
         // ----------------------------------------------------------------
@@ -309,6 +347,16 @@ namespace LibEntidades.Alberdi
 
             if (status == 200 || status == 201)
                 return;   // OK
+
+            // 409 Conflict = el webapi ya tiene un comprobante con este Seq (índice
+            // único). Es el caso del reintento tras un timeout en el que el server
+            // SÍ lo había grabado: para el POS está sincronizado, no es un error.
+            if (status == 409)
+            {
+                Loging.EscribeMensaje(
+                    "SyncWorker: el webapi informa que el comprobante ya existia (409); se da por sincronizado.");
+                return;
+            }
 
             if (status >= 400 && status < 500)
             {
