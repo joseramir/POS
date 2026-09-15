@@ -77,7 +77,8 @@ namespace LibEntidades.Alberdi
                     intentos        INTEGER NOT NULL DEFAULT 0,
                     ultimo_intento  TEXT,
                     fecha_ticket    TEXT    NOT NULL,
-                    error_detalle   TEXT
+                    error_detalle   TEXT,
+                    proximo_intento TEXT
                 );
 
                 -- Índice para acelerar la consulta de pendientes
@@ -92,6 +93,49 @@ namespace LibEntidades.Alberdi
                 // CREATE TABLE IF NOT EXISTS permite múltiples llamadas seguras
                 using (SQLiteCommand cmd = new SQLiteCommand(ddl, conn))
                     cmd.ExecuteNonQuery();
+
+                // Las bases creadas antes del backoff por ticket no tienen la columna:
+                // CREATE TABLE IF NOT EXISTS no las modifica.
+                AgregarColumnaSiFalta(conn, "proximo_intento", "TEXT");
+            }
+        }
+
+        private static void AgregarColumnaSiFalta(SQLiteConnection conn, string columna, string tipo)
+        {
+            using (SQLiteCommand cmd = new SQLiteCommand("PRAGMA table_info(ticket_sync);", conn))
+            using (SQLiteDataReader rdr = cmd.ExecuteReader())
+            {
+                while (rdr.Read())
+                {
+                    if (string.Equals(rdr.GetString(1), columna, StringComparison.OrdinalIgnoreCase))
+                        return;
+                }
+            }
+
+            string sql = string.Format("ALTER TABLE ticket_sync ADD COLUMN {0} {1};", columna, tipo);
+            using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
+                cmd.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Espera antes de reintentar un ticket que falló por timeout o error del
+        /// servidor, según cuántos intentos lleva. Antes se reintentaba en el ciclo
+        /// siguiente (30 s) sin importar cuántas veces hubiera fallado: un webapi
+        /// lento recibía el mismo comprobante cada 30 s mientras seguía grabando
+        /// el anterior. Con MAX_INTENTOS = 10 el ticket se reintenta durante
+        /// aproximadamente una hora y media antes de pasar a ERROR_PERMANENTE.
+        /// </summary>
+        public static TimeSpan EsperaReintento(int intentos)
+        {
+            switch (intentos)
+            {
+                case 0:
+                case 1:  return TimeSpan.FromSeconds(30);
+                case 2:  return TimeSpan.FromMinutes(1);
+                case 3:  return TimeSpan.FromMinutes(2);
+                case 4:  return TimeSpan.FromMinutes(5);
+                case 5:  return TimeSpan.FromMinutes(10);
+                default: return TimeSpan.FromMinutes(15);
             }
         }
 
@@ -139,14 +183,18 @@ namespace LibEntidades.Alberdi
         /// <summary>
         /// Devuelve los tickets pendientes de sincronización,
         /// ordenados cronológicamente (más antiguos primero).
+        /// Saltea los que están esperando su próximo reintento (ver EsperaReintento).
         /// </summary>
         /// <param name="limite">Cantidad máxima a devolver por lote.</param>
         public List<TicketPendiente> ObtenerPendientes(int limite)
         {
+            // proximo_intento y @ahora usan el mismo formato ISO ("o"), que se
+            // compara bien como texto.
             const string sql = @"
                 SELECT id, seq, payload, intentos
                 FROM   ticket_sync
                 WHERE  estado = 'PENDIENTE'
+                AND    (proximo_intento IS NULL OR proximo_intento <= @ahora)
                 ORDER  BY fecha_ticket ASC
                 LIMIT  @limite;";
 
@@ -155,6 +203,7 @@ namespace LibEntidades.Alberdi
             using (SQLiteConnection conn = AbrirConexion())
             using (SQLiteCommand cmd = new SQLiteCommand(sql, conn))
             {
+                cmd.Parameters.AddWithValue("@ahora",  DateTime.Now.ToString("o"));
                 cmd.Parameters.AddWithValue("@limite", limite);
                 using (SQLiteDataReader rdr = cmd.ExecuteReader())
                 {
@@ -225,7 +274,8 @@ namespace LibEntidades.Alberdi
                 ? ESTADO_ERROR_PERMANENTE
                 : ESTADO_PENDIENTE;
 
-            ActualizarEstado(id, nuevoEstado, intentos, detalle);
+            DateTime proximo = DateTime.Now.Add(EsperaReintento(intentos));
+            ActualizarEstado(id, nuevoEstado, intentos, detalle, proximo.ToString("o"));
             return nuevoEstado;
         }
 
@@ -237,17 +287,18 @@ namespace LibEntidades.Alberdi
         /// </summary>
         public void MarcarErrorPermanente(long id, int intentos, string detalle)
         {
-            ActualizarEstado(id, ESTADO_ERROR_PERMANENTE, intentos, detalle);
+            ActualizarEstado(id, ESTADO_ERROR_PERMANENTE, intentos, detalle, null);
         }
 
-        private void ActualizarEstado(long id, string estado, int intentos, string detalle)
+        private void ActualizarEstado(long id, string estado, int intentos, string detalle, string proximoIntento)
         {
             const string sql = @"
                 UPDATE ticket_sync SET
-                    estado         = @estado,
-                    intentos       = @intentos,
-                    ultimo_intento = @ahora,
-                    error_detalle  = @error
+                    estado          = @estado,
+                    intentos        = @intentos,
+                    ultimo_intento  = @ahora,
+                    error_detalle   = @error,
+                    proximo_intento = @proximo
                 WHERE id = @id;";
 
             using (SQLiteConnection conn = AbrirConexion())
@@ -257,6 +308,7 @@ namespace LibEntidades.Alberdi
                 cmd.Parameters.AddWithValue("@intentos", intentos);
                 cmd.Parameters.AddWithValue("@ahora",    DateTime.Now.ToString("o"));
                 cmd.Parameters.AddWithValue("@error",    detalle ?? "");
+                cmd.Parameters.AddWithValue("@proximo",  (object)proximoIntento ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@id",       id);
                 cmd.ExecuteNonQuery();
             }

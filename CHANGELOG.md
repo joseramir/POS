@@ -5,6 +5,38 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - SyncWorker: espera creciente entre reintentos de un ticket
+
+### Contexto
+
+- Un ticket que fallaba por timeout o error del servidor se reintentaba en el ciclo siguiente
+  (30 s), sin importar cuántas veces hubiera fallado. Un webapi lento recibía el mismo
+  comprobante cada 30 s mientras seguía grabando el anterior.
+- Un error de conexión (webapi caído) contaba como intento del ticket más antiguo. Con el webapi
+  caído unos 20 minutos (10 ciclos de 120 s) ese ticket pasaba a `ERROR_PERMANENTE` y no se
+  enviaba nunca más, aunque el servidor nunca lo había recibido.
+
+### Cambios (`LibEntidades/Alberdi`)
+
+1. `Ticketsyncrepository.cs`: columna nueva `proximo_intento` en `ticket_sync`. Las bases
+   existentes se migran solas al abrirlas (`ALTER TABLE` si falta).
+2. `MarcarError` programa el próximo intento según los intentos acumulados (`EsperaReintento`):
+   30 s, 1 min, 2 min, 5 min, 10 min y después 15 min. Con `MAX_INTENTOS = 10`, el ticket se
+   reintenta durante una hora y media antes de pasar a `ERROR_PERMANENTE`.
+3. `ObtenerPendientes` saltea los tickets cuya espera no venció; los demás siguen saliendo en
+   orden.
+4. `Syncworker.cs`: el error de conexión ya no suma intentos al ticket; solo se loguea y corta
+   el ciclo, que espera `INTERVALO_BACKOFF` (120 s). El log de cada fallo indica en cuántos
+   segundos es el próximo intento.
+
+### A tener en cuenta
+
+- Compilado con MSBuild 3.5 y probado aparte contra SQLite (12 casos, incluida la migración de
+  una base vieja). Sin probar en caja.
+- El timeout del POST sigue en 15 s.
+
+---
+
 ## 2026-09-15 - Total 0 en el comprobante del webapi y tickets enviados a la cobradora
 
 ### Contexto

@@ -212,7 +212,13 @@ namespace LibEntidades.Alberdi
                     // o inalcanzable. El servidor NUNCA vio el ticket, así que
                     // el reintento es inofensivo. Como el problema es de red y
                     // no de este ticket, sí corresponde cortar el lote.
-                    RegistrarFallo(item, ex.Message, "sin conexion");
+                    // No cuenta como intento del ticket: antes sí, y con el
+                    // webapi caído unos 20 minutos (10 ciclos de 120 s) el más
+                    // antiguo pasaba a ERROR_PERMANENTE y no se enviaba nunca más.
+                    // La espera la da INTERVALO_BACKOFF.
+                    Loging.EscribeMensaje(string.Format(
+                        "SyncWorker: ticket {0} sin conexion con el webapi, se reintenta en el proximo ciclo - {1}",
+                        item.Seq, ex.Message));
                     _hayErrorRed = true;
                     break;
                 }
@@ -266,8 +272,9 @@ namespace LibEntidades.Alberdi
             string estado = _repo.MarcarError(item.Id, item.Intentos + 1, detalle);
 
             Loging.EscribeMensaje(string.Format(
-                "SyncWorker: ticket {0} {1} (intento {2}) - {3}",
-                item.Seq, tipo, item.Intentos + 1, detalle));
+                "SyncWorker: ticket {0} {1} (intento {2}, proximo en {3} s) - {4}",
+                item.Seq, tipo, item.Intentos + 1,
+                (int)TicketSyncRepository.EsperaReintento(item.Intentos + 1).TotalSeconds, detalle));
 
             if (estado == TicketSyncRepository.ESTADO_ERROR_PERMANENTE)
                 AlertarNoSincronizado(item, detalle);
