@@ -40,6 +40,13 @@ namespace LibEntidades.Alberdi
             if (doc == null || doc.NumeroComprobante <= 0 || doc.PuntoVenta <= 0)
                 return null;
 
+            // Los anulados conservan el Guid aleatorio. No se vuelven a cerrar al reprocesar (la
+            // anulacion no se reprocesa) y el numero de un ticket cancelado puede repetirse el
+            // mismo dia con el mismo total y lineas (por ejemplo, el mismo articulo cancelado dos
+            // veces en el autoservicio): con el Seq derivado, el segundo se perderia.
+            if (doc.Anulado)
+                return null;
+
             DateTime fecha = (doc.FechaHora == DateTime.MinValue) ? DateTime.Now : doc.FechaHora;
 
             string clave = string.Format(CultureInfo.InvariantCulture,

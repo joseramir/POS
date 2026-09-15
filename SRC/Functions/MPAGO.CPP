@@ -3106,6 +3106,16 @@ void ProcMpag(void *mpg_, int fwrite)
 					}
 				}
 
+				// Al reprocesar tampoco se guarda el total del ticket al empezar a cobrar (lo hace
+				// mpago_): si el reproceso parte de cero (ResetPOSAcumInternal, por ejemplo en
+				// MostrarMayorEnPantalla al reiniciar una caja mayorista) tVtaReal queda en 0 y el
+				// comprobante viajaba con Total 0. Si ya tiene valor (CMOS) no se toca.
+				if(!fwrite && inOper == 1 && fabs(tVtaReal) < 0.001)
+				{
+					tVtaReal = tkTot;
+					WriteCmos(TOTVTAREAL);
+				}
+
 				inOper = 2;
 				import = atof_(mpg->importe);
 				// Al reprocesar el pago no pasa por mpago_: se rearma desde el renglon, antes del

@@ -2880,6 +2880,7 @@ void ResetPOSAcum()
 	NumCompNc = TipoCompNc = 0;
 	*nroTicketOriginal = 0;
 	pasadoACobradora = false;
+	ticketDevuelto = false;
 	numSuperv = 0;
 
 	ResetPOSAcumInternal();
@@ -3225,7 +3226,13 @@ void WriteEOPFiscal(int fullAnul)
 		*e.ticketOriginal = 0;
 		*e.codMotivoNc = 0;
 		if (Dump::docActual != nullptr){
-			Dump::docActual->Total = System::Convert::ToDecimal(tVtaReal);
+			// En un ticket anulado tVtaReal suele valer 0 (se carga al empezar a cobrar) y el
+			// comprobante viajaba al webapi con Total 0 y sus lineas: va el monto anulado, el
+			// mismo que queda en montoAnul.
+			if (hasarEop)
+				Dump::docActual->Total = System::Convert::ToDecimal(xTotal.VerTotal().ToDouble());
+			else
+				Dump::docActual->Total = System::Convert::ToDecimal(tVtaReal);
 			Dump::docActual->Anulado = e.anuFlag;
 		}
 	}
@@ -3257,7 +3264,11 @@ void WriteEOPFiscal(int fullAnul)
 	
 	
 	e.writeOnline = 'F';
-	if (Dump::docActual != nullptr){
+	//   El ticket enviado a la caja cobradora (o devuelto por ella) se cierra aca como anulado, pero
+	//   no es una venta ni una anulacion: el comprobante lo emite la cobradora. No se manda al webapi
+	//   de ventas, que si no recibia las mismas lineas dos veces.
+	bool noEnviarAlWebapi = hasarEop && (pasadoACobradora || ticketDevuelto);
+	if (Dump::docActual != nullptr && !noEnviarAlWebapi){
 		Dump::docActual->PuntoVenta = e.ptovta;
 		Dump::docActual->TipoComprobante = pf->TipoComprobante;
 		Dump::docActual->NumeroComprobante = e.ntick;

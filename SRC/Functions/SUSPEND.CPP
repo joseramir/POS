@@ -448,6 +448,8 @@ void CrearTempDbfParaSql(char *fname)
 }
 
 //Realiza el proceso de eleccion de la Factura a cobrar.
+extern bool ticketDevuelto;		// variab.cpp
+
 void recupera_sql(int cual)
 {
 #ifdef FACTSQL	
@@ -498,6 +500,7 @@ void recupera_sql(int cual)
 			WriteTickTmp("", "Ticket Devuelto para cobrar...", 0, 0, 0, 0, false);
 			superv(0);
 			TruncTrans();
+			ticketDevuelto = true;		// no va al webapi de ventas (ver WriteEOPFiscal)
 			hasarEop = 1;
 			WriteEOPFiscal(1);		
 			ClearMsg();

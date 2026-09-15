@@ -301,6 +301,9 @@ extern int nroVendMay;
 //para validar si el ticket fue pasado a la cobradora
 extern bool pasadoACobradora;
 
+//para no mandar al webapi de ventas el ticket devuelto a la cobradora (recupera_sql)
+extern bool ticketDevuelto;
+
 //para almacenar el numero de supervisor que hace anulacion total
 extern int numSuperv;
 

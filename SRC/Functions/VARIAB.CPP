@@ -267,6 +267,9 @@ int nroVendMay = 0;
 //para validar si el ticket fue pasado a la cobradora
 bool pasadoACobradora;
 
+//para no mandar al webapi de ventas el ticket devuelto a la cobradora (recupera_sql)
+bool ticketDevuelto = false;
+
 //para almacenar el numero de supervisor que hace anulacion total
 int numSuperv;
 

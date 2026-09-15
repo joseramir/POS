@@ -5,6 +5,40 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - Total 0 en el comprobante del webapi y tickets enviados a la cobradora
+
+### Contexto
+
+Alrededor del 1 % de los comprobantes llega al webapi de ventas con `Total = 0` y líneas. El total
+sale de `tVtaReal`, que se carga recién al empezar a cobrar (`mpago_`). Pasaba en tres casos:
+
+- **Cierres como anulado** (`hasarEop`): anulación total del ticket, ticket enviado a la caja
+  cobradora y ticket devuelto por la cobradora. Si no se había empezado a cobrar, `Total = 0`.
+- Los **enviados a la cobradora y los devueltos** además se mandaban como `Anulado = true` con sus
+  líneas, y después la cobradora manda el comprobante real con las mismas líneas.
+- **Reinicio a mitad del cobro en una caja mayorista**: `MostrarMayorEnPantalla` llama a
+  `ResetPOSAcumInternal` (`tVtaReal = 0`) y el reproceso de los pagos no lo volvía a cargar.
+
+### Cambios
+
+1. `DUMP.CPP`, `WriteEOPFiscal`: en los anulados el `Total` es el monto anulado
+   (`xTotal.VerTotal()`, el mismo que queda en `montoAnul`).
+2. `DUMP.CPP`, `WriteEOPFiscal`: el ticket enviado a la cobradora (`pasadoACobradora`) o devuelto
+   (`ticketDevuelto`, nuevo en `VARIAB.CPP` / `OPC.H`, lo marca `recupera_sql` en `SUSPEND.CPP`)
+   no se graba en el buffer del webapi. `ResetPOSAcum` limpia la marca.
+3. `MPAGO.CPP`, `ProcMpag`: al reprocesar el primer pago, si `tVtaReal` está en 0 se carga con el
+   pendiente del ticket, como hace `mpago_`.
+4. `LibEntidades`, `SeqComprobante`: los anulados conservan el `Guid` aleatorio. La anulación no se
+   reprocesa, y un ticket cancelado puede repetir número, día, total y líneas.
+
+### A tener en cuenta
+
+- El C++ sin compilar; `LibEntidades` compilado con MSBuild 3.5 y probado aparte. Sin probar en caja.
+- Una anulación real de un ticket recuperado desde la cobradora (`DoCorriAll`) se sigue mandando
+  como anulado.
+
+---
+
 ## 2026-09-15 - Seq del comprobante derivado de sus datos
 
 ### Contexto
