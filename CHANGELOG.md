@@ -5,6 +5,37 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - Seq del comprobante derivado de sus datos
+
+### Contexto
+
+El `Seq` que identifica el comprobante ante el webapi de ventas era un `Guid` aleatorio creado junto
+con el `HeaderDoc`. En `WriteEOPFiscal` el comprobante se graba en el buffer (`PostComprobante`)
+**antes** de avanzar `act_trans`, y en el medio está el POST sincrónico de parking. Si la caja se
+cae en ese intervalo, al reiniciar se reprocesa el trans, el ticket se vuelve a cerrar con un
+`HeaderDoc` nuevo y viajaba con **otro** `Seq`: ni el `INSERT OR IGNORE` del buffer ni el índice
+único del webapi lo frenaban.
+
+### Cambios (`LibEntidades`)
+
+1. `Alberdi/SeqComprobante.cs` (nuevo): UUID versión 5 (RFC 4122) a partir de tienda, caja, punto
+   de venta, tipo, número, fecha (día), anulado, total y cantidad de líneas. Sigue siendo un GUID
+   de 36 caracteres: el contrato con el webapi no cambia.
+2. `ClienteComprobante.PostComprobante`: usa ese `Seq` antes de grabar en el buffer. Si el
+   comprobante no tiene número o punto de venta, conserva el `Guid` aleatorio.
+
+### A tener en cuenta
+
+- Compilado con MSBuild 3.5 y probado con un programa aparte (vector conocido del RFC + 13 casos).
+  Sin probar en caja.
+- Dos comprobantes distintos solo coinciden si repiten todos esos datos. El caso realista son dos
+  anulaciones del mismo número, el mismo día, con el mismo total y la misma cantidad de líneas: la
+  segunda se daría por sincronizada.
+- No lo frena si el reinicio cae otro día o si el impresor asigna otro número al volver a cerrar
+  (ahí es un segundo comprobante fiscal, otro problema).
+
+---
+
 ## 2026-09-15 - Pagos que no llegaban al comprobante del webapi
 
 ### Contexto

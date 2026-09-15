@@ -39,6 +39,13 @@ namespace LibEntidades.Alberdi
 
             try
             {
+                // Seq derivado de los datos del comprobante y no el Guid aleatorio del
+                // constructor: si el mismo ticket se vuelve a cerrar tras un reinicio,
+                // viaja con el mismo Seq y no se duplica (ver SeqComprobante).
+                string seq = SeqComprobante.Calcular(doc);
+                if (seq != null)
+                    doc.Seq = seq;
+
                 _syncRepo.InsertarPendiente(doc);
             }
             catch (Exception ex)

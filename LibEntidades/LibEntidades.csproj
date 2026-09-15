@@ -70,6 +70,7 @@
     <Compile Include="Alberdi\Parking\ParkingPost.cs" />
     <Compile Include="Alberdi\PromoAplicada.cs" />
     <Compile Include="Alberdi\Reparticion.cs" />
+    <Compile Include="Alberdi\SeqComprobante.cs" />
     <Compile Include="Alberdi\Sucursal.cs" />
     <Compile Include="Alberdi\Syncworker.cs" />
     <Compile Include="Alberdi\TipoIva.cs" />
