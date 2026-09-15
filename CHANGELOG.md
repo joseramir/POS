@@ -5,6 +5,45 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - Precio mayorista: ítems repetidos en el comprobante del webapi
+
+### Contexto
+
+El webapi de ventas (AcumVentas) recibe comprobantes con líneas idénticas repetidas en `Detalle[]`
+(mismo código, importe, cantidad y hora). Pasa solo en las tiendas con precio mayorista
+(`modo-mayor` distinto de 0 en `[suspender]` de `opciones.ini`), en más de la mitad de sus tickets.
+
+Causa: `ProcPlu` (`PLU.CPP`) grababa el renglón, llamaba a `ReprocTransMayor` y **después** agregaba
+el ítem a `Dump::docActual`. Cuando `ReprocTransMayor` recalcula el precio mayorista (con artículos
+con `pvm`, casi en cada escaneo), llama a `ResetPOSAcumInternal` (`docActual = nullptr`) y reprocesa
+todo `trans.dbf`, que ya incluye el renglón recién grabado: el comprobante se rearmaba con el ítem y,
+al volver, `ProcPlu` lo agregaba otra vez.
+
+Efectos colaterales del mismo rearmado: todas las líneas quedaban con la hora del último reproceso y
+se perdía `NroVendedor`.
+
+### Cambios
+
+`PLU.CPP`, `ProcPlu`:
+
+1. El control de montos (`ReprocTransMayor`) pasa a después de cargar el ítem en `docActual`. Si hay
+   recálculo, el comprobante se descarta y se rearma desde el trans con el ítem una sola vez (y con el
+   precio ya corregido); si no lo hay, queda el recién agregado. No se deduplica nada.
+2. Al reprocesar (`fwrite = 0`), `Hora` sale de la hora grabada en el renglón (`hora`, HHMMSS), igual
+   que las promociones.
+
+`FACTU.CPP`, `ReprocTransMayor`:
+
+3. Conserva `NroVendedor` del comprobante a través del rearmado.
+
+### A tener en cuenta
+
+- Sin compilar ni probar en caja.
+- Los comprobantes ya enviados con líneas repetidas no se corrigen desde el POS.
+- `ProcNcPlu` no cambia: no llama a `ReprocTransMayor`.
+
+---
+
 ## 2026-09-14 - SyncWorker: limpieza del buffer y 409 como sincronizado
 
 ### Contexto

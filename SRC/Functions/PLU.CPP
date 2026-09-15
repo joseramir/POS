@@ -1370,10 +1370,6 @@ void ProcPlu(void *p_, int fwrite)
 	else			GlobalRngCount++;
 	inOper = 1;
 
-	//control de montos
-	if (x >= 0.01)
-		ReprocTransMayor(p, false);
-
 	//Agregado para centralizar
 	if (!p->anulado){
 		if (Dump::docActual == nullptr){
@@ -1398,10 +1394,25 @@ void ProcPlu(void *p_, int fwrite)
 		detaItem->Precio = System::Convert::ToDecimal(p->precuni/100.0);
 		detaItem->Milla = p->umillas;
 		detaItem->Escaneado = p->s_c_flag == 1;
-		detaItem->Hora = System::DateTime::Now;
+		// Al reprocesar vale la hora grabada en el renglon (HHMMSS de time_()), no la del reproceso:
+		// con el precio mayorista el ticket se rearma en cada escaneo y todas las lineas quedaban
+		// con la hora del ultimo.
+		long hhmmss = (long)p->hora;
+		if (!fwrite && hhmmss >= 0 && hhmmss <= 235959 && (hhmmss / 100) % 100 < 60 && hhmmss % 100 < 60)
+			detaItem->Hora = System::DateTime::Today.Add(System::TimeSpan(hhmmss / 10000, (hhmmss / 100) % 100, hhmmss % 100));
+		else
+			detaItem->Hora = System::DateTime::Now;
 		detaItem->NroReg = tDbf.Recno();
 		Dump::docActual->Detalle->Add(detaItem);
 	}
+
+	//   Control de montos del precio mayorista. Va DESPUES de cargar el item en docActual: si
+	//   ReprocTransMayor cambia el precio, vacia docActual (ResetPOSAcumInternal) y reprocesa todo
+	//   el trans, que ya incluye este renglon (WriteDump de arriba), y el item vuelve a quedar
+	//   cargado una sola vez. Antes se agregaba despues del reproceso y quedaba repetido en el
+	//   Detalle que va al webapi de ventas.
+	if (x >= 0.01)
+		ReprocTransMayor(p, false);
 }
 
 //   La siguiente funcion asienta el proceso del plu.

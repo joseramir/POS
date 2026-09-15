@@ -374,6 +374,10 @@ void ReprocTransMayor(struct DDplu_ *vta, bool anulFlag)
 	decprec = System::Convert::ToDecimal(uPrec);
 
 	// Reprocesa el trans para recalcular los totales y redibujar los renglones.
+	// ResetPOSAcumInternal descarta docActual y el reproceso lo vuelve a crear desde el trans, donde
+	// no queda el vendedor mayorista del comprobante: se conserva a mano.
+	int nroVendDoc = (Dump::docActual != nullptr) ? Dump::docActual->NroVendedor : 0;
+
 	GCStatic::AddLockToTrans("PrecioMayor");
 	globalRedraw = true;
 	ResetPOSAcumInternal();
@@ -432,6 +436,9 @@ void ReprocTransMayor(struct DDplu_ *vta, bool anulFlag)
 		FactuPercepTissh(0, false);
 		FactuPercepIva(0, false);
 	}*/
+
+	if (Dump::docActual != nullptr && nroVendDoc > 0)
+		Dump::docActual->NroVendedor = nroVendDoc;
 
 	globalRedraw = false;
 	GCStatic::ReleaseLockFromTrans("PrecioMayor");
