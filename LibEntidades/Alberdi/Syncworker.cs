@@ -66,6 +66,14 @@ namespace LibEntidades.Alberdi
         private const string ARCHIVO_ALERTA = "TicketsNoSincronizados.txt";
 
         /// <summary>
+        /// Intentos fallidos (timeout o 5xx) a partir de los cuales se deja un aviso
+        /// en ARCHIVO_ALERTA. El ticket NO se descarta: se sigue reintentando cada
+        /// 15 minutos. Con la espera creciente, el aviso llega unos 90 minutos
+        /// después del primer fallo.
+        /// </summary>
+        private const int INTENTOS_AVISO = 10;
+
+        /// <summary>
         /// Días que se conservan en ticketsync.db los tickets ya sincronizados,
         /// por si hay que reenviar o revisar un comprobante.
         /// </summary>
@@ -232,7 +240,7 @@ namespace LibEntidades.Alberdi
                     Loging.EscribeMensaje(
                         string.Format("SyncWorker: ticket {0} ERROR PERMANENTE - {1}",
                         item.Seq, ex.Message));
-                    AlertarNoSincronizado(item, ex.Message);
+                    AlertarNoSincronizado(item, ex.Message, false);
                     // Seguimos con el siguiente; este no bloqueará el lote
                 }
                 catch (Exception ex)
@@ -264,35 +272,41 @@ namespace LibEntidades.Alberdi
         // ----------------------------------------------------------------
 
         /// <summary>
-        /// Contabiliza el intento fallido, lo deja en el log y avisa si con
-        /// este intento el ticket agotó los reintentos.
+        /// Contabiliza el intento fallido y programa el próximo (el ticket sigue
+        /// PENDIENTE). Al llegar a INTENTOS_AVISO deja constancia una sola vez.
         /// </summary>
         private void RegistrarFallo(TicketPendiente item, string detalle, string tipo)
         {
-            string estado = _repo.MarcarError(item.Id, item.Intentos + 1, detalle);
+            _repo.MarcarError(item.Id, item.Intentos + 1, detalle);
 
             Loging.EscribeMensaje(string.Format(
                 "SyncWorker: ticket {0} {1} (intento {2}, proximo en {3} s) - {4}",
                 item.Seq, tipo, item.Intentos + 1,
                 (int)TicketSyncRepository.EsperaReintento(item.Intentos + 1).TotalSeconds, detalle));
 
-            if (estado == TicketSyncRepository.ESTADO_ERROR_PERMANENTE)
-                AlertarNoSincronizado(item, detalle);
+            if (item.Intentos + 1 == INTENTOS_AVISO)
+                AlertarNoSincronizado(item, detalle, true);
         }
 
         /// <summary>
-        /// Deja constancia visible de un ticket que no se va a reintentar más.
-        /// La fila queda en ticketsync.db como ERROR_PERMANENTE (LimpiarSincronizados
-        /// solo borra las SINCRONIZADO, así que el dato no se pierde), pero
-        /// nadie consulta el SQLite: sin este aviso el ticket desaparecía del
-        /// webapi en silencio.
+        /// Deja constancia visible de un ticket con problemas: nadie consulta el
+        /// SQLite, y sin este aviso el ticket podía faltar en el webapi en silencio.
+        /// sigueReintentando = false: el servidor lo rechazó (4xx) y queda como
+        /// ERROR_PERMANENTE (LimpiarSincronizados no lo borra). true: lleva
+        /// INTENTOS_AVISO fallos transitorios y se sigue reintentando.
         /// </summary>
-        private void AlertarNoSincronizado(TicketPendiente item, string detalle)
+        private void AlertarNoSincronizado(TicketPendiente item, string detalle, bool sigueReintentando)
         {
-            Loging.EscribeMensaje(string.Format(
-                "SyncWorker: *** ATENCION *** el ticket {0} NO se sincronizo y no se " +
-                "reintenta mas. Queda como ERROR_PERMANENTE en ticketsync.db; ver {1}",
-                item.Seq, ARCHIVO_ALERTA));
+            if (sigueReintentando)
+                Loging.EscribeMensaje(string.Format(
+                    "SyncWorker: *** ATENCION *** el ticket {0} lleva {1} intentos sin " +
+                    "sincronizar; se sigue reintentando cada 15 minutos. Ver {2}",
+                    item.Seq, item.Intentos + 1, ARCHIVO_ALERTA));
+            else
+                Loging.EscribeMensaje(string.Format(
+                    "SyncWorker: *** ATENCION *** el ticket {0} NO se sincronizo y no se " +
+                    "reintenta mas. Queda como ERROR_PERMANENTE en ticketsync.db; ver {1}",
+                    item.Seq, ARCHIVO_ALERTA));
 
             try
             {
@@ -303,7 +317,9 @@ namespace LibEntidades.Alberdi
                 {
                     w.WriteLine("-------------------------------------------------------------------");
                     w.WriteLine(string.Format(
-                        "{0} - ticket {1} NO sincronizado tras {2} intento(s)",
+                        sigueReintentando
+                            ? "{0} - ticket {1} sin sincronizar tras {2} intento(s), SE SIGUE REINTENTANDO"
+                            : "{0} - ticket {1} NO sincronizado tras {2} intento(s)",
                         DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"),
                         item.Seq, item.Intentos + 1));
                     w.WriteLine("Ultimo error: " + detalle);

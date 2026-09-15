@@ -5,6 +5,40 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - Seq y reintentos: ajustes tras contrastar con la base del webapi
+
+### Contexto
+
+La sesión del webapi de ventas contrastó los cambios con la base productiva y marcó dos riesgos:
+
+- **Clave del `Seq`**: incluía el total y la cantidad de líneas. Al reprocesar el ticket, las
+  líneas anuladas no se vuelven a cargar (en vivo sí quedan en `Detalle`, marcadas), así que un
+  segundo cierre de un ticket con correcciones cambiaba la cantidad y generaba otro `Seq`: el
+  índice único del webapi no lo frenaba.
+- **Descarte por intentos**: un ticket con timeout o error 5xx pasaba a `ERROR_PERMANENTE` a los
+  10 intentos (unos 90 minutos). Con la base del webapi caída o bloqueada ese rato, quedaba para
+  gestión manual. El webapi responde 500 solo ante errores transitorios.
+
+### Cambios (`LibEntidades/Alberdi`)
+
+1. `SeqComprobante`: la clave es tienda, caja, punto de venta, tipo, número y día, que identifican
+   el comprobante fiscal.
+2. `Ticketsyncrepository.MarcarError`: el ticket sigue `PENDIENTE` sin importar cuántos intentos
+   lleve (a partir del sexto, cada 15 minutos). `ERROR_PERMANENTE` queda solo para lo que el
+   servidor rechaza (4xx, `MarcarErrorPermanente`). Se quita `MAX_INTENTOS`.
+3. `Syncworker`: al llegar a 10 intentos deja un aviso en el log y en
+   `TicketsNoSincronizados.txt`, una sola vez, y sigue reintentando.
+
+### A tener en cuenta
+
+- Compilado con MSBuild 3.5 y probado aparte (`Seq` y reintentos contra SQLite). Sin probar en caja.
+- Dos comprobantes distintos con el mismo número el mismo día, en la misma caja y punto de venta,
+  tendrían el mismo `Seq`: solo pasaría si el impresor fiscal repite número.
+- Un ticket que el webapi no pueda grabar nunca por un error transitorio se reintenta cada 15
+  minutos indefinidamente; el aviso en `TicketsNoSincronizados.txt` lo deja a la vista.
+
+---
+
 ## 2026-09-15 - SyncWorker: espera creciente entre reintentos de un ticket
 
 ### Contexto

@@ -31,9 +31,10 @@ namespace LibEntidades.Alberdi
         /// el llamador conserva el Guid aleatorio, porque dos comprobantes distintos sin numero
         /// terminarian con el mismo Seq y el segundo se perderia como "ya sincronizado".
         ///
-        /// La clave lleva, ademas del numero fiscal, la fecha, si esta anulado, el total y la
-        /// cantidad de lineas: asi dos comprobantes distintos solo coinciden si repiten TODO eso
-        /// (numeracion reiniciada por cambio de impresor el mismo dia con el mismo importe y lineas).
+        /// La clave es la identidad del comprobante fiscal: tienda, caja, punto de venta, tipo,
+        /// numero y dia. NO lleva total ni cantidad de lineas: un segundo cierre del mismo ticket
+        /// puede no repetirlos (al reprocesar, las lineas anuladas no se vuelven a cargar y en vivo
+        /// si quedan en el Detalle), y entonces saldria otro Seq y se duplicaria igual.
         /// </summary>
         public static string Calcular(HeaderDoc doc)
         {
@@ -42,24 +43,21 @@ namespace LibEntidades.Alberdi
 
             // Los anulados conservan el Guid aleatorio. No se vuelven a cerrar al reprocesar (la
             // anulacion no se reprocesa) y el numero de un ticket cancelado puede repetirse el
-            // mismo dia con el mismo total y lineas (por ejemplo, el mismo articulo cancelado dos
-            // veces en el autoservicio): con el Seq derivado, el segundo se perderia.
+            // mismo dia (por ejemplo, dos cancelaciones seguidas en el autoservicio): con el Seq
+            // derivado, la segunda se perderia.
             if (doc.Anulado)
                 return null;
 
             DateTime fecha = (doc.FechaHora == DateTime.MinValue) ? DateTime.Now : doc.FechaHora;
 
             string clave = string.Format(CultureInfo.InvariantCulture,
-                "acumventas|{0}|{1}|{2}|{3}|{4}|{5:yyyyMMdd}|{6}|{7:0.00}|{8}",
+                "acumventas|{0}|{1}|{2}|{3}|{4}|{5:yyyyMMdd}",
                 doc.Tienda != null ? doc.Tienda.IdTienda : 0,
                 doc.Caja,
                 doc.PuntoVenta,
                 doc.TipoComprobante,
                 doc.NumeroComprobante,
-                fecha,
-                doc.Anulado ? 1 : 0,
-                doc.Total,
-                doc.Detalle != null ? doc.Detalle.Count : 0);
+                fecha);
 
             return UuidV5(Espacio, clave).ToString();
         }

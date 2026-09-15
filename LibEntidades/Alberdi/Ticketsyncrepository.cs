@@ -25,9 +25,6 @@ namespace LibEntidades.Alberdi
         public const string ESTADO_SINCRONIZADO      = "SINCRONIZADO";
         public const string ESTADO_ERROR_PERMANENTE  = "ERROR_PERMANENTE";
 
-        // A partir de este número de intentos fallidos se marca ERROR_PERMANENTE
-        private const int MAX_INTENTOS = 10;
-
         /// <summary>
         /// Inicializa el repositorio.
         /// </summary>
@@ -122,8 +119,8 @@ namespace LibEntidades.Alberdi
         /// servidor, según cuántos intentos lleva. Antes se reintentaba en el ciclo
         /// siguiente (30 s) sin importar cuántas veces hubiera fallado: un webapi
         /// lento recibía el mismo comprobante cada 30 s mientras seguía grabando
-        /// el anterior. Con MAX_INTENTOS = 10 el ticket se reintenta durante
-        /// aproximadamente una hora y media antes de pasar a ERROR_PERMANENTE.
+        /// el anterior. A partir del sexto intento se reintenta cada 15 minutos,
+        /// sin límite (ver MarcarError).
         /// </summary>
         public static TimeSpan EsperaReintento(int intentos)
         {
@@ -259,28 +256,22 @@ namespace LibEntidades.Alberdi
         }
 
         /// <summary>
-        /// Registra un intento fallido.
-        /// Si se supera MAX_INTENTOS pasa a ERROR_PERMANENTE
-        /// (requiere revisión manual / alerta).
+        /// Registra un intento fallido por timeout o error del servidor y programa
+        /// el próximo intento según EsperaReintento. El ticket sigue PENDIENTE sin
+        /// importar cuántos intentos lleve: esos errores son transitorios (el
+        /// webapi responde 500 solo ante fallas de conexión o bloqueo de la base),
+        /// y antes, a los 10 intentos, un ticket válido pasaba a ERROR_PERMANENTE
+        /// y quedaba para gestión manual. ERROR_PERMANENTE es solo para lo que el
+        /// servidor rechaza (MarcarErrorPermanente).
         /// </summary>
-        /// <returns>
-        /// El estado en que quedó la fila: ESTADO_PENDIENTE si todavía se va a
-        /// reintentar, o ESTADO_ERROR_PERMANENTE si agotó los intentos. El
-        /// llamador lo usa para avisar cuando el ticket deja de reintentarse.
-        /// </returns>
-        public string MarcarError(long id, int intentos, string detalle)
+        public void MarcarError(long id, int intentos, string detalle)
         {
-            string nuevoEstado = intentos >= MAX_INTENTOS
-                ? ESTADO_ERROR_PERMANENTE
-                : ESTADO_PENDIENTE;
-
             DateTime proximo = DateTime.Now.Add(EsperaReintento(intentos));
-            ActualizarEstado(id, nuevoEstado, intentos, detalle, proximo.ToString("o"));
-            return nuevoEstado;
+            ActualizarEstado(id, ESTADO_PENDIENTE, intentos, detalle, proximo.ToString("o"));
         }
 
         /// <summary>
-        /// Marca el ticket como ERROR_PERMANENTE sin esperar a MAX_INTENTOS.
+        /// Marca el ticket como ERROR_PERMANENTE.
         /// Para cuando ya se sabe que reintentar no sirve, típicamente un 4xx
         /// del endpoint: el servidor rechazó el dato y va a rechazarlo igual
         /// las próximas nueve veces.
