@@ -1381,7 +1381,19 @@ void ProcPlu(void *p_, int fwrite)
 			Dump::docActual->CanalVenta = gcnew String(sapcnlvta);
 			Dump::docActual->NroVendedor = antNroVend;		
 		}
-		Dump::docActual->FechaHora = System::DateTime::Now;
+		// Al reprocesar valen la fecha y hora grabadas en el renglon (fecha AAAAMMDD de date(), hora
+		// HHMMSS de time_()), no las del reproceso. La fecha del comprobante entra en su Seq: un
+		// ticket de las 23:59 reprocesado despues de medianoche cambiaba de dia y viajaba con otro Seq.
+		System::DateTime momento = System::DateTime::Now;
+		long aaaammdd = (long)p->fecha;
+		long hhmmss = (long)p->hora;
+		if (!fwrite && aaaammdd >= 20000101 && aaaammdd <= 29991231
+			&& (aaaammdd / 100) % 100 >= 1 && (aaaammdd / 100) % 100 <= 12
+			&& aaaammdd % 100 >= 1 && aaaammdd % 100 <= System::DateTime::DaysInMonth(aaaammdd / 10000, (aaaammdd / 100) % 100)
+			&& hhmmss >= 0 && hhmmss <= 235959 && (hhmmss / 100) % 100 < 60 && hhmmss % 100 < 60)
+			momento = System::DateTime(aaaammdd / 10000, (aaaammdd / 100) % 100, aaaammdd % 100,
+				hhmmss / 10000, (hhmmss / 100) % 100, hhmmss % 100);
+		Dump::docActual->FechaHora = momento;
 
 		LibEntidades::Alberdi::DetalleDoc ^detaItem = gcnew LibEntidades::Alberdi::DetalleDoc();
 		detaItem->Codigo = p->cod;
@@ -1394,14 +1406,9 @@ void ProcPlu(void *p_, int fwrite)
 		detaItem->Precio = System::Convert::ToDecimal(p->precuni/100.0);
 		detaItem->Milla = p->umillas;
 		detaItem->Escaneado = p->s_c_flag == 1;
-		// Al reprocesar vale la hora grabada en el renglon (HHMMSS de time_()), no la del reproceso:
-		// con el precio mayorista el ticket se rearma en cada escaneo y todas las lineas quedaban
-		// con la hora del ultimo.
-		long hhmmss = (long)p->hora;
-		if (!fwrite && hhmmss >= 0 && hhmmss <= 235959 && (hhmmss / 100) % 100 < 60 && hhmmss % 100 < 60)
-			detaItem->Hora = System::DateTime::Today.Add(System::TimeSpan(hhmmss / 10000, (hhmmss / 100) % 100, hhmmss % 100));
-		else
-			detaItem->Hora = System::DateTime::Now;
+		// Misma fecha y hora del renglon (ver arriba): con el precio mayorista el ticket se rearma en
+		// cada escaneo y todas las lineas quedaban con la hora del ultimo.
+		detaItem->Hora = momento;
 		detaItem->NroReg = tDbf.Recno();
 		Dump::docActual->Detalle->Add(detaItem);
 	}

@@ -5,6 +5,30 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - Seq: la fecha del comprobante sale del renglón al reprocesar
+
+### Contexto
+
+El `Seq` se calcula con el día del comprobante (`HeaderDoc.FechaHora`). Esa fecha la ponía
+`ProcPlu` con la hora actual **también al reprocesar**: un ticket de las 23:59 que se vuelve a
+cerrar después de medianoche (por ejemplo tras un reinicio) cambiaba de día y generaba otro `Seq`.
+Además, `LeeCCDatos` la pisaba con la hora de elección del cliente, que un reproceso no repite.
+Caso marcado por la sesión del webapi de ventas.
+
+### Cambios
+
+1. `PLU.CPP`, `ProcPlu`: al reprocesar (`fwrite = 0`), `FechaHora` del comprobante y `Hora` de la
+   línea salen de `fecha` (AAAAMMDD) y `hora` (HHMMSS) del renglón. En vivo sigue la hora actual.
+2. `MPAGO.CPP`, `LeeCCDatos`: carga `FechaHora` solo si todavía no tiene valor.
+
+### A tener en cuenta
+
+- Sin compilar ni probar en caja.
+- `Hora` de las líneas reprocesadas ahora lleva también la fecha del renglón (antes, el día del
+  reproceso).
+
+---
+
 ## 2026-09-15 - Seq y reintentos: ajustes tras contrastar con la base del webapi
 
 ### Contexto

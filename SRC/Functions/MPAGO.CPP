@@ -840,7 +840,11 @@ void LeeCCDatos()
 	Dump::docActual->Direccion = Dump::actCliente->Direccion;
 	Dump::docActual->mReparticion->Descripcion = Dump::actCliente->RepaDes;
 	Dump::docActual->mReparticion->ReparticionID = Dump::actCliente->Repa;
-	Dump::docActual->FechaHora = System::DateTime::Now;
+	//   Solo si todavia no hay items: la fecha del comprobante la dan los items (ProcPlu) y entra
+	//   en su Seq. Pisarla con la hora de eleccion del cliente hacia que un reproceso (que no pasa
+	//   por aca) pudiera dar otro dia y otro Seq.
+	if (Dump::docActual->FechaHora == System::DateTime::MinValue)
+		Dump::docActual->FechaHora = System::DateTime::Now;
 	SetTipoIvaDoc();
 
 	Dump::docActual->Caja = caja;
