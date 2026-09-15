@@ -5,6 +5,41 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-15 - Pagos que no llegaban al comprobante del webapi
+
+### Contexto
+
+Alrededor del 1,5 % de los comprobantes llega al webapi de ventas (AcumVentas) con `Pagos[]` vacío.
+El `PagoDoc` se agrega solo en vivo, desde quien llama a `ProcMpag`: `mpago_` para los medios
+comunes y el pago extendido para los cupones de Posnet, Prisma y Prisma ECR. Había dos huecos:
+
+- **Reproceso del trans** (reinicio de la caja a mitad del cobro, ticket incorporado): `ProcMpag`
+  con `fwrite = 0` no agregaba nada. Como el comprobante se rearma desde cero, los pagos hechos
+  antes del reinicio se perdían.
+- **SmartPoint (Mercado Pago)**: `mpago_3` nunca agregaba el `PagoDoc`.
+
+### Cambios (`MPAGO.CPP`)
+
+1. `ProcMpag` con `fwrite = 0` agrega el pago desde el renglón (`AgregarPagoDocDesdeRenglon`), antes
+   del cierre del ticket. Carga medio, importe, vuelto, hora y extracción. Para los cupones
+   integrados (`esposnet`) rearma los datos de la tarjeta que quedaron partidos en los campos del
+   renglón: código, cuotas, lote, autorización, cupón, terminal, QR e integración. Si no se pueden
+   leer, quedan en su valor por defecto. El registro del cliente (`nro 9999`) no es un pago y no se
+   agrega.
+2. `mpago_3` agrega el `PagoDoc` de SmartPoint (importe, tarjeta, cuotas, autorización, QR,
+   `Integracion = 3`). Al reprocesar, un cupón integrado sin los datos de `mpago_2` también se
+   toma como SmartPoint (`Integracion = 3`).
+
+### A tener en cuenta
+
+- Sin compilar ni probar en caja.
+- En vivo no cambia nada para los demás medios: los `PagoDoc` de `mpago_` y del pago extendido
+  siguen igual, y `ProcMpag` con `fwrite = 1` no agrega nada (no hay duplicados).
+- Los datos de tarjeta rearmados del renglón son los que entraron en los campos: si falta alguno,
+  el pago llega igual con medio e importe.
+
+---
+
 ## 2026-09-15 - Precio mayorista: ítems repetidos en el comprobante del webapi
 
 ### Contexto

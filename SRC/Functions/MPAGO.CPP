@@ -2858,6 +2858,23 @@ void mpago_3(int cual, TransSmartPointMp ^paramlapos)
 	sprintf(mpag.montoextrac, "%.2lf", 0);
 	dRepeat = pRepeat = 0;
 	mpag.nticket = NumPedEcommerce;
+
+	//   El cupon de SmartPoint (Mercado Pago) no llegaba al comprobante del webapi: el pago extendido
+	//   agrega el PagoDoc de Posnet/Prisma/ECR antes de llamar a mpago_2, pero el de SmartPoint no lo
+	//   agregaba nadie.
+	if (Dump::docActual != nullptr)
+	{
+		LibEntidades::Alberdi::PagoDoc ^itemPago = gcnew LibEntidades::Alberdi::PagoDoc();
+		itemPago->MedioPago = p->nro;
+		itemPago->Monto = paramlapos->Importe;
+		itemPago->CodTarjeta = paramlapos->AlbNroTarjeta;
+		itemPago->Cuotas = paramlapos->AlbNumCuota;
+		itemPago->Autorizacion = (paramlapos->NroAutorizacion != nullptr) ? paramlapos->NroAutorizacion : String::Empty;
+		itemPago->Integracion = 3;		// SmartPoint (TipoVerifone 3)
+		itemPago->QR = paramlapos->QrModo;
+		Dump::docActual->Pagos->Add(itemPago);
+	}
+
 	ProcMpag(&mpag, 1);
 	//if(actSusp) SetTableStatus(actSusp, TABLE_EMPTY); MESAS
 	actSusp = 0;
@@ -2873,6 +2890,72 @@ void mpago_3(int cual, TransSmartPointMp ^paramlapos)
 	delete[] cl_smartPointMP;
 }
 
+
+//   Carga en el comprobante del webapi de ventas (Dump::docActual) un pago leido del trans al
+//   reprocesar (reinicio de la caja, ticket incorporado). En vivo el PagoDoc lo agrega quien llama a
+//   ProcMpag (mpago_, mpago_3 y el pago extendido) con los datos completos de la tarjeta; en el
+//   renglon quedan medio, importe, vuelto, hora, extraccion y, en los cupones integrados
+//   (esposnet), fmtCard partido en fecha/nombre/dni/telef/direc/local. Antes no se agregaba nada
+//   y el ticket llegaba al webapi sin los pagos hechos antes del reinicio.
+static void AgregarPagoDocDesdeRenglon(struct DDmpag_ *mpg)
+{
+	if (Dump::docActual == nullptr || mpg->nro == 9999)
+		return;
+
+	LibEntidades::Alberdi::PagoDoc ^itemPago = gcnew LibEntidades::Alberdi::PagoDoc();
+	System::Decimal dec = 0;
+	int entero = 0;
+
+	itemPago->MedioPago = mpg->nro;
+	if (System::Decimal::TryParse(gcnew String(mpg->importe), dec))
+		itemPago->Monto = dec;
+	dec = 0;
+	if (System::Decimal::TryParse(gcnew String(mpg->vuelto), dec))
+		itemPago->Vuelto = dec;
+	dec = 0;
+	if (mpg->esextracash && System::Decimal::TryParse(gcnew String(mpg->montoextrac), dec))
+		itemPago->Extracash = dec;
+
+	// Hora grabada en el renglon (HHMMSS de time_()), no la del reproceso.
+	long hhmmss = (long)mpg->_hora;
+	if (hhmmss >= 0 && hhmmss <= 235959 && (hhmmss / 100) % 100 < 60 && hhmmss % 100 < 60)
+		itemPago->Hora = System::DateTime::Today.Add(System::TimeSpan(hhmmss / 10000, (hhmmss / 100) % 100, hhmmss % 100));
+
+	if (mpg->esposnet)
+	{
+		// dtarjeta = "%02d%s" (codigo de tarjeta + ultimos digitos), ver mpago_2.
+		if (mpg->dtarjeta[0] >= '0' && mpg->dtarjeta[0] <= '9' && mpg->dtarjeta[1] >= '0' && mpg->dtarjeta[1] <= '9')
+			itemPago->CodTarjeta = (mpg->dtarjeta[0] - '0') * 10 + (mpg->dtarjeta[1] - '0');
+
+		// fmtCard de mpago_2: nrotarjeta,vencim,N,cuotas,tasa,recargo,lote,autorizacion,cupon,0,
+		// tipoTerminal (1 Posnet, 2 Prisma/ECR),terminal,esqr. SmartPoint (mpago_3) graba otra cosa
+		// (ExternalReference,IdPayment): si no tiene ese formato se toma como SmartPoint.
+		String ^csv = gcnew String(mpg->fecha);
+		csv = csv + gcnew String(mpg->nombre) + gcnew String(mpg->dni) + gcnew String(mpg->telef);
+		csv = csv + gcnew String(mpg->direc) + gcnew String(mpg->local);
+		array<String^> ^tok = csv->Split(',');
+		if (tok->Length >= 13 && tok[2]->Trim() == "N")
+		{
+			if (System::Int32::TryParse(tok[3]->Trim(), entero) && entero > 0)
+				itemPago->Cuotas = entero;
+			if (System::Int32::TryParse(tok[6]->Trim(), entero))
+				itemPago->Lote = entero;
+			String ^aut = tok[7]->Trim();
+			if (aut->Length <= 10)
+				itemPago->Autorizacion = aut;
+			if (System::Int32::TryParse(tok[8]->Trim(), entero))
+				itemPago->Cupon = entero;
+			itemPago->Integracion = (tok[10]->Trim() == "2") ? 1 : 0;
+			if (System::Int32::TryParse(tok[11]->Trim(), entero))
+				itemPago->Terminal = entero;
+			itemPago->QR = (tok[12]->Trim() == "1");
+		}
+		else
+			itemPago->Integracion = 3;
+	}
+
+	Dump::docActual->Pagos->Add(itemPago);
+}
 
 void ProcMpag(void *mpg_, int fwrite)
 {
@@ -3025,6 +3108,10 @@ void ProcMpag(void *mpg_, int fwrite)
 
 				inOper = 2;
 				import = atof_(mpg->importe);
+				// Al reprocesar el pago no pasa por mpago_: se rearma desde el renglon, antes del
+				// posible cierre del ticket. En vivo lo agrega quien llama.
+				if(!fwrite)
+					AgregarPagoDocDesdeRenglon(mpg);
 				if(fwrite)
 				{			
 					// Imprime el medio de pago.
