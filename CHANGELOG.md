@@ -5,6 +5,43 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-17 - Vouchers: la pila de pendientes se llenaba en 9 y descartaba el resto en silencio
+
+### Contexto
+
+En CO21, caja 6, el ticket 6302 del 17/09 (cliente mayorista, repartición 17) tenía que emitir 27
+vouchers 171 y salió con 8. La promo había calculado bien: el premio en el `trans` de ese ticket
+(`func = 26`, `codpromo = 20260914000001`) trae `p1 = 171` y `p2 = 27`.
+
+El límite estaba en la impresión. `StackVoucher()` cortaba con `voucherPendCount == 9` sobre un
+arreglo de 10, así que un ticket nunca podía dejar más de 9 vouchers pendientes. El ticket 6302 apiló
+primero un voucher 164 y después los 27 del 171: entraron el 164 y 8 del 171, y las 19 llamadas
+restantes volvieron sin hacer nada **y sin dejar traza**, por eso el log no mostraba ningún error.
+
+`F_VoucherC` (`VOUCHERC(nro, cant)`) llama a `StackVoucher()` una vez por copia, de modo que cualquier
+promo cuya cantidad dependa del monto de la venta puede pasarse del tope.
+
+### Cambios
+
+`VOUCHER.CPP`:
+
+1. El tope pasa a ser `MAX_VOUCHERS_PEND`, definido en 100, y el arreglo `vouchersPend` se dimensiona
+   con esa constante. La guarda ahora compara `>= MAX_VOUCHERS_PEND`, así que se usan los 100 lugares
+   (antes el arreglo tenía 10 y solo se llenaban 9).
+2. El descarte por pila llena deja una línea en el log:
+   `AVISO - voucher <nro> descartado: pila de pendientes llena (100)`.
+
+El `nro` inválido (fuera de 0..999) sigue saliendo en silencio, como antes.
+
+### Pendiente
+
+Los vouchers de promo se expanden al apilarse, con el comprobante fiscal todavía sin abrir, así que
+`@TICK_NRO@` sale con el número del ticket anterior (en el log del 17/09, los del 6302 dicen
+`Ticket: 6301`). Es el mismo defecto que se corrigió en `0fa41b0` para `@TICKET@` en la ruta de
+`mpago_()`, pero la ruta de promos no se tocó.
+
+---
+
 ## 2026-09-17 - Trans: renglón con `func` dañado y borrado por un buffer compartido entre hilos
 
 ### Contexto

@@ -11,8 +11,13 @@
 #endif
 
 //   Lista de vouchers cargados.
+//   MAX_VOUCHERS_PEND: cuantos vouchers puede dejar pendientes UN ticket. Una promo con
+//   VOUCHERC(nro, cant) apila 'cant' copias, asi que el tope tiene que dar para la
+//   cantidad mas alta que pueda calcular una promo (ver StackVoucher).
+#define MAX_VOUCHERS_PEND 100
+
 voucher *voucherList[1000];
-voucher *vouchersPend[10];
+voucher *vouchersPend[MAX_VOUCHERS_PEND];
 int voucherLoadFlags[1000];
 int voucherPendCount = 0;
 
@@ -145,7 +150,17 @@ voucher *ExpandVoucher(int nro)
 //   Apila la impresion de un voucher.
 void StackVoucher(int nro)
 {
-	if(voucherPendCount == 9 || nro < 0 || nro > 999) return;
+	char lsmensv[120];
+
+	if(nro < 0 || nro > 999) return;
+	if(voucherPendCount >= MAX_VOUCHERS_PEND)
+	{
+		//   La pila esta llena y el voucher se pierde. Antes el descarte era silencioso:
+		//   una promo con VOUCHERC de cantidad alta imprimia de menos sin dejar rastro.
+		sprintf(lsmensv, "AVISO - voucher %d descartado: pila de pendientes llena (%d)", nro, MAX_VOUCHERS_PEND);
+		WriteBootLog(lsmensv);
+		return;
+	}
 	if(voucherLoadFlags[nro] == 0)
 		LoadVoucher(nro);
 	if(voucherLoadFlags[nro] != 1)
