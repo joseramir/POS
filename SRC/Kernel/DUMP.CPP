@@ -187,10 +187,11 @@ void trDecode(union Dump_ *d)
 	struct dFld_ *xf;
 	int i;
 	char *p;
+	char tVal[256];		// Buffer propio: tdes_ es global y otros hilos lo escriben sin el lock del trans.
 
 	GCStatic::AddLockToTrans("trDecode");
-	tDbf.Get("func", tdes_);
-	d->f.id = atoi(tdes_);
+	tDbf.Get("func", tVal);
+	d->f.id = atoi(tVal);
 	for(i = sizeof(xxDump) / sizeof(dDbf_ *); i; i--)
 	{
 		xd = xxDump[i-1];
@@ -200,41 +201,41 @@ void trDecode(union Dump_ *d)
 			xf = &xd->dFld[0];
 			while(xf->ancho)
 			{
-				if(!tDbf.Get(xf->fName, tdes_))
+				if(!tDbf.Get(xf->fName, tVal))
 				{
-					sprintf(tdes_, "Error %d Interno: GET trans.%s'.\n", view.dberr, xf->fName);
+					sprintf(tVal, "Error %d Interno: GET trans.%s'.\n", view.dberr, xf->fName);
 					GCStatic::ReleaseLockFromTrans("trDecode");
-					AbnormalEnd(tdes_);
+					AbnormalEnd(tVal);
 				}
 				switch(xf->type)
 				{
 					case 'L':		// Dato tipo UNSIGNED LONG.
-						*((unsigned long *) p) = atol(tdes_);
+						*((unsigned long *) p) = atol(tVal);
 						break;
 
 					case 'I':		// Dato tipo INT.
-						*((int *) p) = atoi(tdes_);
+						*((int *) p) = atoi(tVal);
 						break;
 					
 					case 'T':		// Dato tipo CHAR. (BOOL)
-						*p = (tdes_[0]  == 'T')? 1: 0;
+						*p = (tVal[0]  == 'T')? 1: 0;
 						break;
 					
 					case 'C':		// Dato tipo STR. (CHAR *)
-						Trim(tdes_);
-						if(strlen(tdes_) > (size_t)(xf->ancho - 1))
-							tdes_[xf->ancho - 1] = 0;
-						STRCPY(p, tdes_);
+						Trim(tVal);
+						if(strlen(tVal) > (size_t)(xf->ancho - 1))
+							tVal[xf->ancho - 1] = 0;
+						STRCPY(p, tVal);
 						break;
 
 					case 'X':		// Dato tipo UNSIGNED LONG.
-						*((long long *) p) = _atoi64(tdes_);
+						*((long long *) p) = _atoi64(tVal);
 						break;
 
 					default:		// Dato no previsto!!!
-						sprintf(tdes_, "Error Interno: 'TrDecode: Tipo '%c' no programado'.\n", xf->type);
+						sprintf(tVal, "Error Interno: 'TrDecode: Tipo '%c' no programado'.\n", xf->type);
 						GCStatic::ReleaseLockFromTrans("trDecode");
-						AbnormalEnd(tdes_);
+						AbnormalEnd(tVal);
 				}
 				p += xf->ancho;
 				xf++;
@@ -258,6 +259,8 @@ void trEncode(union Dump_ *d)
 	int i;
 	char *p;
 	char fhdata[10];
+	char tVal[256];		// Buffer propio: tdes_ es global y otros hilos lo escriben sin el lock del trans.
+	char tErr[300];
 
 	GCStatic::AddLockToTrans("trEncode");
 	for(i = sizeof(xxDump) / sizeof(dDbf_ *); i; i--)
@@ -265,8 +268,8 @@ void trEncode(union Dump_ *d)
 		xd = xxDump[i-1];
 		if(xd->func == d->f.id)
 		{
-			_itoa(d->f.id, tdes_, 10);
-			tDbf.Replace("func", tdes_);
+			_itoa(d->f.id, tVal, 10);
+			tDbf.Replace("func", tVal);
 			p = ((char *) d) + 4;	// Saltea el ID.
 			xf = &xd->dFld[0];
 			while(xf->ancho)
@@ -274,36 +277,36 @@ void trEncode(union Dump_ *d)
 				switch(xf->type)
 				{
 					case 'L':		// Dato tipo UNSIGNED LONG.
-						_ltoa( *((unsigned long *) p), tdes_, 10);
+						_ltoa( *((unsigned long *) p), tVal, 10);
 						break;
 
 					case 'I':		// Dato tipo INT.
-						_itoa( *((int *) p), tdes_, 10);
+						_itoa( *((int *) p), tVal, 10);
 						break;
 					
 					case 'T':		// Dato tipo CHAR. (BOOL)
-						tdes_[0] = *p? 'T': 'F';
-						tdes_[1] = 0;
+						tVal[0] = *p? 'T': 'F';
+						tVal[1] = 0;
 						break;
 					
 					case 'C':		// Dato tipo STR. (CHAR *)
 						Trim(p);
-						STRCPY(tdes_, p);						
+						STRCPY(tVal, p);						
 						break;
 
 					case 'X':		// Dato tipo UNSIGNED LONG.
-						_i64toa( *((long long *) p), tdes_, 10);
+						_i64toa( *((long long *) p), tVal, 10);
 						break;
 
 					default:		// Dato no previsto!!!
-						sprintf(tdes_, "Error Interno: 'TrEncode: Tipo '%c' no programado'.\n", xf->type);
+						sprintf(tVal, "Error Interno: 'TrEncode: Tipo '%c' no programado'.\n", xf->type);
 						GCStatic::ReleaseLockFromTrans("trEncode");
-						AbnormalEnd(tdes_);
+						AbnormalEnd(tVal);
 				}
-				if(!tDbf.Replace(xf->fName, tdes_))
+				if(!tDbf.Replace(xf->fName, tVal))
 				{
-					sprintf(tdes_, "Fallo (%d) interno: REPLACE trans.%s WITH '%s'.\n", view.dberr, xf->fName, tdes_);
-					AbnormalEnd(tdes_);
+					sprintf(tErr, "Fallo (%d) interno: REPLACE trans.%s WITH '%s'.\n", view.dberr, xf->fName, tVal);
+					AbnormalEnd(tErr);
 				}
 				p += xf->ancho;
 				xf++;
@@ -317,14 +320,14 @@ void trEncode(union Dump_ *d)
 	tDbf.Replace("fecha", fhdata);
 	sprintf(fhdata, "%d", time_());
 	tDbf.Replace("hora", fhdata);
-	_itoa(caja, tdes_, 10);
-	tDbf.Replace("caja", tdes_);
+	_itoa(caja, tVal, 10);
+	tDbf.Replace("caja", tVal);
 
 	GCStatic::ReleaseLockFromTrans("trEncode");
 	if(!i)
 	{
-		sprintf(tdes_, "Error Interno: 'TrEncode= Funcion %d no encontrada en tabla'.\n", d->f.id);
-		AbnormalEnd(tdes_);
+		sprintf(tVal, "Error Interno: 'TrEncode= Funcion %d no encontrada en tabla'.\n", d->f.id);
+		AbnormalEnd(tVal);
 	}
 }
 

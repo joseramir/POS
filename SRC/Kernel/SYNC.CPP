@@ -226,8 +226,9 @@ int xCopyFile(char *src, char *dst, char *tMsg, bool usaTemp)
 	{
 		#ifdef POSDEBUG
 		DBG(DBGCopyFile, 1, "DBGCopyFile: No coinciden los tamaños.");
-        sprintf(tdes_, "Fuente: %d, Destino: %d.", filelength(sh), filelength(dh));
-	    DBG(DBGCopyFile, 1, tdes_);
+        char tDbgMsg[100];	// Local: tdes_ es global y el trans lo usa desde otro hilo.
+        sprintf(tDbgMsg, "Fuente: %d, Destino: %d.", filelength(sh), filelength(dh));
+	    DBG(DBGCopyFile, 1, tDbgMsg);
 		#endif
 		close(sh); close(dh);
 		FREE(tdst);
@@ -236,8 +237,9 @@ int xCopyFile(char *src, char *dst, char *tMsg, bool usaTemp)
 	}
 	
 	#ifdef POSDEBUG
-	sprintf(tdes_, "DBGCopyFile: Copia finalizada. Copie %d bytes.", tCopied);
-	DBG(DBGCopyFile, 1, tdes_);
+	char tDbgMsg[100];	// Local: tdes_ es global y el trans lo usa desde otro hilo.
+	sprintf(tDbgMsg, "DBGCopyFile: Copia finalizada. Copie %d bytes.", tCopied);
+	DBG(DBGCopyFile, 1, tDbgMsg);
 	#endif
 	close(sh);
 	close(dh);
@@ -305,8 +307,9 @@ int xCopyDosFile(char *src, char *dst, char *tMsg)
 	//   Efectua el volcado.
 	xRet = (int)_spawnl(_P_WAIT, "c:\\command.com", "command", "/C", "copy", src, dst, ">nul", NULL);
 	#ifdef POSDEBUG
-	sprintf(tdes_, "DBGCopyFile: El _spawnl de COPY retorno %d - errno: %d.", xRet, errno);
-	DBG(DBGCopyFile, 2, tdes_);
+	char tDbgMsg[100];	// Local: tdes_ es global y el trans lo usa desde otro hilo.
+	sprintf(tDbgMsg, "DBGCopyFile: El _spawnl de COPY retorno %d - errno: %d.", xRet, errno);
+	DBG(DBGCopyFile, 2, tDbgMsg);
 	#endif
 
 	//   Verifica que la copia haya tenido exito.

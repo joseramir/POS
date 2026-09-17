@@ -5,6 +5,39 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-17 - Trans: renglón con `func` dañado y borrado por un buffer compartido entre hilos
+
+### Contexto
+
+En el `trans` de CO04, caja 2, del 14/09, el registro 806 (un artículo pesable ya facturado por la
+impresora) quedó con `func = "  D"` en lugar de `"  4"` y marcado como borrado. El resto del registro
+estaba intacto.
+
+- El borrado es consecuencia: `trDecode` borra todo renglón cuyo `func` no reconoce, y por ahí pasan
+  la Z, el arqueo del cajero y las ventas rápidas. Esos recorridos saltean los borrados, así que el
+  artículo deja de sumar en los informes del POS.
+- La `D` sale de una condición de carrera sobre `tdes_`, un buffer global. `trEncode` arma ahí el
+  valor de `func` (`"4"`) y lo pasa a `Replace`. En paralelo, `xCopyFile` (hilo de sincronización con
+  el server, sin el lock del trans) hace `sprintf(tdes_, "DBGCopyFile: ...")`, porque `POSDEBUG` está
+  definido en el build. Si el `sprintf` alcanzó a escribir solo la `D`, `tdes_` queda `"D"` y
+  `Replace` lo alinea a la derecha: `"  D"`.
+
+### Cambios
+
+1. `SYNC.CPP`, `xCopyFile` y `xCopyDosFile`: los mensajes de depuración usan un buffer local.
+2. `DUMP.CPP`, `trEncode` y `trDecode`: usan buffers locales en lugar de `tdes_`, así ningún otro
+   código que escriba en `tdes_` puede alterar lo que se graba o se lee del trans. De paso, el mensaje
+   de error del `Replace` fallido ya no usa el mismo buffer como origen y destino del `sprintf`.
+
+### A tener en cuenta
+
+- Sin compilar ni probar en caja.
+- Diagnóstico por el contenido del registro y el código: el log no registra la copia que coincidió.
+- Queda un riesgo del mismo tipo sin tocar: `pbuff` (`IDX.CPP`) es global para todos los `Replace` e
+  índices, y el hilo de sincronización hace `Replace` sobre `comandos.dbf` sin el lock del trans.
+
+---
+
 ## 2026-09-15 - Seq: la fecha del comprobante sale del renglón al reprocesar
 
 ### Contexto
