@@ -102,6 +102,10 @@ public:
 		descuentos->operator =(0); 
 	}
 
+	double VerDescuentoDouble() {
+		return descuentos->ToDouble();
+	}
+
 	BDecimal &VerVenta() { 
 		return *venta; 
 	}
@@ -141,6 +145,11 @@ public:
 		venta->operator = (0);
 		pagos->operator = (0);
 		recfinan->operator = (0);
+		//   'descuentos' tambien. Es el descuento SIMULADO de las promos y lo unico que
+		//   lo limpiaba eran las funciones de PROMOS.cpp: si un ticket terminaba por un
+		//   camino que no pasa por ellas, el importe seguia vivo y se le restaba al
+		//   ticket siguiente hasta que se apretara TOTAL.
+		descuentos->operator = (0);
 	}
 
 	// Retorna el total de la operacion.

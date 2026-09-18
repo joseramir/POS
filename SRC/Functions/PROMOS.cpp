@@ -90,6 +90,7 @@ void LimpiarPromosAplicadas()
 ::ArrayList *promos = NULL;
 PromoDef *actualPromo;			// Promocion actual bajo evaluacion, para el name-resolver
 int accionActualSeq = 0;		// Accion (1-based) en ejecucion, para sellar el renglon DPromo.
+double simDesctoAcum = 0;		// Descuento simulado que sumo la pasada actual de CalcularPromosAntesMP().
 bool promosCalc = false;		// Para evitar el calculo de las promociones mas de una vez.
 bool promosAplicadas = false;	// Para evitar aplicar promociones mas de una vez.
 bool forceReloadPromos = false;	// Indica que se deben recargar las promociones antes de usarlas.
@@ -334,7 +335,14 @@ int CargaPromosExtra()
 // de ingreso de los medios de pago.
 void CalcularPromosAntesMP()
 {
-	xTotal.ClearDescuento();	
+	char tsim[200];
+
+	//   El descuento que entra tendria que ser siempre 0: lo unico que lo deja vivo es
+	//   una pasada anterior de esta misma funcion. Se traza porque un remanente es la
+	//   firma de que algo sumo por fuera del recorrido de abajo.
+	double desctoPrevio = xTotal.VerDescuentoDouble();
+	xTotal.ClearDescuento();
+	simDesctoAcum = 0;
 	tresSinInteres = 0;
 	seisSinInteres = 0;
 	/*double tkpiibb = xTotal.VerRecargo(10002).ToDouble();
@@ -398,9 +406,37 @@ void CalcularPromosAntesMP()
 		}
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(tkpiibb));
 
+		//   El descuento simulado tiene que ser EXACTAMENTE lo que sumo esta pasada. Es un
+		//   recorrido completo que arranca de cero (el ClearDescuento de arriba), asi que
+		//   cualquier otra cosa que quede en el acumulador sobra. Un guard por promo no
+		//   sirve aca: una sola accion puede llamar a CommonDescto() varias veces
+		//   (F_DescTotalIva2, F_TraeStockPremio), y un flag por ticket ya se descarto en
+		//   su momento porque cambia duplicar por faltante. Se contrasta el total.
+		double desctoAhora = xTotal.VerDescuentoDouble();
+		double difDescto = desctoAhora - simDesctoAcum;
+		if(difDescto < 0) difDescto = -difDescto;
+		if(difDescto > 0.005)
+		{
+			sprintf(tsim, "PROMOSIM - DESCUADRE: descuentos $%.2lf y esta pasada sumo $%.2lf (entro con $%.2lf). Se corrige a $%.2lf",
+				desctoAhora, simDesctoAcum, desctoPrevio, simDesctoAcum);
+			WriteBootLog(tsim);
+			xTotal.ClearDescuento();
+			if(simDesctoAcum > 0.005)
+				xTotal.AddDescuento(BDecimal::BDecimal(simDesctoAcum));
+		}
+
 		promosCalc = true;			// Evita que esta funcion se llame varias veces.
 		promosAplicadas = false;	// Permite que se apliquen las promociones.
 		WriteCmos(PROMOCALC);
+	}
+
+	//   Cierre de la fase 1: este es el importe que va a ver el cajero en la pantalla de
+	//   medios de pago, que EditaPagoExtendido() arma con VerPendiente().
+	if(xTotal.VerDescuentoDouble() > 0.005 || desctoPrevio > 0.005)
+	{
+		sprintf(tsim, "PROMOSIM - fin: descuento simulado $%.2lf, pendiente $%.2lf (entro con $%.2lf)",
+			xTotal.VerDescuentoDouble(), xTotal.VerPendiente().ToDouble(), desctoPrevio);
+		WriteBootLog(tsim);
 	}
 }
 
@@ -719,6 +755,9 @@ void ReconstruirAcumSaldoPromo()
 void ApliPromoCobra()
 {
 	xTotal.ClearDescuento();
+	//   Esta funcion abre su propio recorrido de simulacion: el acumulador arranca de
+	//   cero igual que en CalcularPromosAntesMP(), si no la traza mezcla las dos pasadas.
+	simDesctoAcum = 0;
 	promosCalc = false;
 	//   Idem la nota de CalcularPromosAntesMP: con precio puntualizado no se promociona.
 	if(globalPromos && !promosCalc && !ticketPrecPuntual)

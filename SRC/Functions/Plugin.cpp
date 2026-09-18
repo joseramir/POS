@@ -456,7 +456,23 @@ void CommonDescto(int codigo, double monto, double cant, bool simular)
 			dbplu.Get("iva", msg); //dbplu.Get(EsRI ? "ivari" : "iva", msg);
 			CalcIvaPromo(auxmonto, atoi(msg), -1);
 			if (gNumMedioPago == 0) //es una promocion normal
-				xTotal.AddDescuento(BDecimal(auxmonto));		
+			{
+				xTotal.AddDescuento(BDecimal(auxmonto));
+
+				//   La fase de simulacion no dejaba NINGUNA traza: la linea "Para aplicar
+				//   importe descto" de mas abajo es de la rama real. Un descuento simulado
+				//   de mas quedaba invisible en el log y solo se notaba en la caja, porque
+				//   el cajero cobraba por un total menor que el que despues exigia el POS.
+				//   simDesctoAcum es la suma de lo que puso ESTA pasada; el descuadre lo
+				//   detecta CalcularPromosAntesMP() al terminar el recorrido.
+				simDesctoAcum += auxmonto;
+				char tsim[200];
+				sprintf(tsim, "PROMOSIM - simula descuento: promo %d (cod %I64d) accion %d, plu %d, $%.2lf, acum $%.2lf, descuentos $%.2lf",
+					actualPromo? actualPromo->num: -1,
+					actualPromo? actualPromo->CodPromo: (long long)0,
+					accionActualSeq, codigo, auxmonto, simDesctoAcum, xTotal.VerDescuentoDouble());
+				WriteBootLog(tsim);
+			}
 			else if (gNumMedioPago > 0)
 			{
 				Controles::PromoMedioPago ^itemMp = gcnew Controles::PromoMedioPago();

@@ -5,6 +5,72 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-18 - Promos: el descuento SIMULADO se contaba dos veces y no dejaba traza
+
+### Contexto
+
+En CO27, caja 7, el ticket abierto del 18/09 (`trans-bak.dbf`) sumó $99.355,28 de artículos y tenía
+una sola promo con descuento, la 117 (`codpromo 20260917000007`, 35 % sobre dos unidades del PLU 25584):
+**-$3.709,99**. El total correcto era $95.645,29, pero la pantalla de medios de pago mostró
+**$91.935,30**, que es $99.355,28 menos **dos** veces el mismo descuento. El cajero cobró esa cifra con
+dos cupones Prisma (91.900,00 + 35,30) y al POS le siguió faltando $3.709,99.
+
+Los renglones de pago lo confirman: con `U_PEND = T` el campo `vuelto` guarda el **pendiente**, y quedó
+en $3.745,29 tras el primer cupon (91.900 + 3.745,29 = 95.645,29) y en $3.709,99 tras el segundo.
+
+O sea: el descuento **real** se aplicó una sola vez y bien -- hay un único `func=4` de -$3.709,99 y un
+único `func=26` con `tpremio=3` --, porque la fase de aplicación tiene el control por promo y por
+acción de agosto (`PromoTotalmenteAplicada`, ver CHANGELOG 2026-08-06 y 2026-08-13). El que se duplicó
+fue el descuento **simulado** de la fase previa. No hubo reinicio de caja: `log7.pos` tiene una sola
+corrida entre las 13:40 y las 13:46, así que no es el bug de doble descuento por reinicio.
+
+La fase de simulación (`CalcularPromosAntesMP`) no tiene ningún control por promo: acumula sobre
+`xTotal.AddDescuento()` y su única red es el `ClearDescuento()` de su primera línea más el flag
+`promosCalc`, que `mpago_()` pone en `false` en cada tecla mientras no estén aplicadas. Y además **no
+loguea nada**: la línea `Para aplicar importe descto` existe sólo en la rama real de `CommonDescto()`,
+así que un descuento simulado de más es invisible hasta que el cajero reclama.
+
+### Cambios
+
+1. **`Plugin.cpp`, `CommonDescto()` rama `simular`:** cada descuento simulado deja una línea
+   `PROMOSIM - simula descuento: promo N (cod C) accion S, plu P, $X, acum $Y, descuentos $Z`. Con eso,
+   dos veces la misma promo (o la misma acción) en una pasada se ve de una leída.
+
+2. **`PROMOS.cpp`, `CalcularPromosAntesMP()`:** el recorrido acumula aparte en `simDesctoAcum` lo que
+   va sumando, y al terminar contrasta ese valor contra `xTotal`. Si no coinciden, lo deja en el log
+   (`PROMOSIM - DESCUADRE`) y **corrige el acumulador** al importe que calculó esta pasada. También
+   traza el descuento con el que entró (debería ser siempre 0) y el pendiente con el que sale, que es
+   justo el número que `EditaPagoExtendido()` le pasa a la pantalla de pagos.
+
+   El invariante es sólido porque la pasada es un recálculo completo que arranca de cero y **el único
+   código que escribe en `descuentos` durante ella es ese `CommonDescto()`** (`PluginFuncs.cpp` no está
+   en `POS.VCPROJ`; el de la rama Janis es otra función). Entonces la corrección nunca puede borrar un
+   descuento legítimo: sólo saca lo que esta pasada no puso.
+
+   No se usó un guard por promo ni por acción a propósito: una sola acción puede llamar varias veces a
+   `CommonDescto()` (`F_DescTotalIva2`, `F_TraeStockPremio`), y un flag por ticket ya se descartó en
+   julio porque cambia duplicar por faltante.
+
+   `ApliPromoCobra()` abre su propio recorrido de simulación, así que también resetea el acumulador.
+
+3. **`Total.h`, `tagTotal::Clear()`:** ahora también resetea `descuentos`. Reseteaba `venta`, `pagos`,
+   `recargos`, `recfinan` y `descMedioPago` pero no ese, y lo único que lo limpiaba eran las funciones
+   de `PROMOS.cpp`. Un ticket que terminara por un camino que no pasa por ellas dejaba el importe vivo,
+   y el subtotal en pantalla del ticket siguiente salía de menos hasta que se apretara TOTAL. Se agregó
+   `VerDescuentoDouble()` para poder contrastarlo.
+
+### Pendiente
+
+El mecanismo exacto por el que la simulación sumó dos veces **no está identificado**: con `trans-bak.dbf`
+y `log7.pos` se prueba el importe duplicado, pero la fase 1 no dejaba rastro. La traza nueva es
+precisamente para cerrarlo en la próxima ocurrencia. Sospecha principal a verificar: `CargaPromosExtra()`
+agrega a `promos` **sin** hacer `promos->Clear()` (la línea está comentada), así que una promo "fiel"
+cargada dos veces quedaría duplicada en la lista; la fase 1 la simularía dos veces y la fase 2 la
+aplicaría una sola, porque `BuscaPromoAplicada()` indexa por `codPromo`. Encaja con que el problema sea
+aleatorio y con promos distintas.
+
+---
+
 ## 2026-09-17 - Vouchers: la pila de pendientes se llenaba en 9 y descartaba el resto en silencio
 
 ### Contexto
