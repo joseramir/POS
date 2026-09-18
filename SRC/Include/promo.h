@@ -79,6 +79,16 @@ public:
 	// Numero de promocion.
 	int num;
 
+	// true = la definicion salio del promo.ini / canastas.dbf locales (ReloadPromos).
+	// Las que carga CargaPromosExtra() desde el servidor quedan en false y no entran
+	// en el control de pasada de abajo.
+	bool desdeIni;
+
+	// Ultima pasada de simulacion en la que se evaluo esta promo. Ver pasadaSimActual
+	// en PROMOS.cpp: el recorrido visita cada PromoDef una sola vez, si aparece dos
+	// veces el descuento simulado se duplica.
+	unsigned long pasadaSim;
+
 	// Rutinas usadas durante la configuracion.
 	void AddExpression(char *exp);
 	void SetFilter(char *exp);
@@ -120,6 +130,7 @@ void AplicaPromoJanis();
 // Variables globales.
 extern bool promosCalc;			// Indica que las promos ya se calcularon.
 extern int accionActualSeq;		// Accion (1-based) de la promo en ejecucion.
+extern unsigned long pasadaSimActual;	// Numero de la pasada de simulacion en curso.
 extern double simDesctoAcum;	// Descuento simulado que sumo la pasada actual de CalcularPromosAntesMP().
 extern bool ticketPrecPuntual;	// El ticket lleva articulos con precio puntualizado: las promos no corren.
 extern bool forceReloadPromos;	// Indica que se deben recargar las promociones antes de usarlas.

@@ -5,6 +5,70 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-18 - Promos: una promo del promo.ini se simula una sola vez por pasada
+
+Continuacion de la entrada de mas abajo del mismo dia. Con dos casos nuevos (caja 1, 17/09, tickets
+183744 y 183745) quedo acotado donde ocurre la duplicacion, y aparecio que la reconciliacion de esa
+entrada **no cubre este escenario**.
+
+### Los tres casos tienen la misma firma
+
+| ticket | articulos | descuento | cierre fiscal | 1er pago |
+|---|---|---|---|---|
+| 183744 (caja 1) | 21.707,59 | -346,00 (promo107) | 21.361,59 | 21.015,59 = items - **2** desc |
+| 183745 (caja 1) | 43.752,07 | -417,90 (promo123) | 43.334,17 | 42.916,27 = items - **2** desc |
+| abierto (CO27/7) | 99.355,28 | -3.709,99 (promo117) | - | 91.935,30 = items - **2** desc |
+
+En los tres hay **un solo** renglon `func=4` y un solo `Para aplicar importe descto` en el log: el
+descuento real se aplica bien una vez, el que se duplica es el simulado con el que se arma la pantalla
+de medios de pago. El cajero cobra de menos y al POS le queda pendiente justo el descuento.
+
+Son promos distintas y ninguna esta repetida en `promo.ini` (caja 1: 280 secciones, ninguna duplicada,
+227 activas, una sola seccion activa por cada lista). Ocurre en **2 de 119** tickets con descuento de esa
+jornada. Cancelar el TOTAL y volver a apretarlo acompana a los tres casos pero no alcanza como
+explicacion: 17 tickets que tambien cancelaron dos o mas veces salieron bien.
+
+### Por que la reconciliacion no alcanzaba
+
+`CalcularPromosAntesMP()` arranca con `ClearDescuento()` y, entre que vuelve y que
+`EditaPagoExtendido()` lee `VerPendiente()`, no hay otro codigo que escriba en `descuentos`. Entonces
+las dos llamadas a `CommonDescto()` caen **dentro de la misma pasada**, y ahi `simDesctoAcum` tambien
+queda duplicado: las dos cifras coinciden y el control no dispara. Ese control sigue sirviendo para
+contaminacion de afuera de la pasada, que es otro caso.
+
+### Cambio
+
+Sello de pasada **por objeto `PromoDef`**. `pasadaSimActual` se incrementa al empezar cada recorrido de
+simulacion (`CalcularPromosAntesMP()` y `ApliPromoCobra()`), y cada promo guarda en `pasadaSim` la
+ultima en la que se la evaluo. El `for` visita cada `PromoDef` una sola vez por definicion del
+recorrido, asi que verla dos veces con el mismo numero de pasada significa que el puntero esta repetido
+en `promos` o que la lista cambio durante el recorrido -- `ReloadPromos()` tambien corre desde el hilo
+de sincronizacion (`SYNC.CPP:530`, con un `if (inOper == 0)` sin lock. En cualquiera de los dos casos
+saltear la segunda visita es lo correcto, y queda la traza
+`PROMOSIM - PROMO REPETIDA EN LA PASADA`.
+
+A diferencia de un guard por accion, esto **no** rompe a las acciones que llaman varias veces a
+`CommonDescto()` dentro de una misma accion (`F_DescTotalIva2`, `F_TraeStockPremio`), y a diferencia de
+un flag por ticket no puede convertir un duplicado en un descuento faltante.
+
+### Alcance
+
+El control vale **solo para las promos que salen del `promo.ini` / `canastas.dbf` locales**, que son las
+que carga `ReloadPromos()` y que ahora quedan marcadas con `PromoDef::desdeIni`. Quedan fuera:
+
+- Las promos "fiel" que trae `CargaPromosExtra()` desde el servidor: se marcan `desdeIni = false` y no
+  entran en el control.
+- Todo el camino de Janis (ecommerce): `mpago_()` llama a `CalcularPromoJanisAntesMP()` **en lugar de**
+  `CalcularPromosAntesMP()`, y ni esa funcion ni `AplicaPromoJanis()` recorren `promos` ni pasan por
+  `CommonDescto()`, asi que no los toca nada de esto.
+
+### Pendiente
+
+Sigue sin identificarse **como** llega la promo a evaluarse dos veces en la misma pasada. El sello lo
+impide y lo deja en el log; recien con esa traza de produccion se va a poder cerrar la causa.
+
+---
+
 ## 2026-09-18 - Promos: el descuento SIMULADO se contaba dos veces y no dejaba traza
 
 ### Contexto

@@ -91,6 +91,7 @@ void LimpiarPromosAplicadas()
 PromoDef *actualPromo;			// Promocion actual bajo evaluacion, para el name-resolver
 int accionActualSeq = 0;		// Accion (1-based) en ejecucion, para sellar el renglon DPromo.
 double simDesctoAcum = 0;		// Descuento simulado que sumo la pasada actual de CalcularPromosAntesMP().
+unsigned long pasadaSimActual = 0;	// Se incrementa al empezar cada recorrido de simulacion.
 bool promosCalc = false;		// Para evitar el calculo de las promociones mas de una vez.
 bool promosAplicadas = false;	// Para evitar aplicar promociones mas de una vez.
 bool forceReloadPromos = false;	// Indica que se deben recargar las promociones antes de usarlas.
@@ -171,6 +172,7 @@ int ReloadPromos()
 					continue;
 				// Crea la promocion.
 				pd = new PromoDef(i);
+				pd->desdeIni = true;	// Definicion del promo.ini / canastas.dbf locales.
 
 				// Descripcion y codigo.
 				pd->Descrip = iniReader.ReadString(secc, "desc", ""); // ExtractIniStr(secc, "desc");
@@ -276,6 +278,10 @@ int CargaPromosExtra()
 	{		
 		// Crea la promocion.
 		pd = new PromoDef(i);
+		//   Promo "fiel" del servidor, no sale del promo.ini local: queda FUERA del control
+		//   de pasada de CalcularPromosAntesMP(). El constructor ya la deja en false, se
+		//   escribe igual para que no dependa de ese default.
+		pd->desdeIni = false;
 		// Descripcion y codigo.
 		pd->CodPromo = System::Convert::ToInt64(unapromo->Codpromo); //ExtractIniLong(secc, "codigo");
 		if (unapromo->MarcaCli > 0)
@@ -357,11 +363,31 @@ void CalcularPromosAntesMP()
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
 		// Se asegura que, al aplicar las acciones, estas solo se simulen.
 		soloSimular = true;
+		if(++pasadaSimActual == 0) pasadaSimActual = 1;	// 0 = "nunca simulada"
 
 		// Examina todas las promociones.
 		for(int i=0; i<promos->Count(); i++)
 		{
 			PromoDef *promo = (PromoDef *)promos->Item(i);
+			//   Una promo del promo.ini local se simula UNA sola vez por pasada: el for la
+			//   visita una sola vez, asi que verla dos veces significa que el puntero esta
+			//   repetido en 'promos' o que la lista cambio durante el recorrido (ReloadPromos
+			//   corre tambien desde el hilo de sincronizacion, SYNC.CPP). Repetirla duplica el
+			//   descuento simulado y el cajero cobra de menos, mientras la fase de aplicacion
+			//   graba uno solo porque la corta PromoTotalmenteAplicada(). A diferencia de un
+			//   guard por accion, esto no rompe a las acciones que llaman varias veces a
+			//   CommonDescto() (F_DescTotalIva2, F_TraeStockPremio).
+			if(promo->desdeIni)
+			{
+				if(promo->pasadaSim == pasadaSimActual)
+				{
+					sprintf(tsim, "PROMOSIM - PROMO REPETIDA EN LA PASADA: promo %d (cod %I64d), indice %d, se saltea",
+						promo->num, promo->CodPromo, i);
+					WriteBootLog(tsim);
+					continue;
+				}
+				promo->pasadaSim = pasadaSimActual;
+			}
 			// Si esta promo ya quedo aplicada y grabada en el ticket actual, no
 			// hace falta volver a simularla: su descuento ya esta reflejado en
 			// el total real.
@@ -766,11 +792,25 @@ void ApliPromoCobra()
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
 		// Se asegura que, al aplicar las acciones, estas solo se simulen.
 		soloSimular = true;		
+		if(++pasadaSimActual == 0) pasadaSimActual = 1;
 
 		// Examina todas las promociones.
 		for(int i=0; i<promos->Count(); i++)
 		{
 			PromoDef *promo = (PromoDef *)promos->Item(i);
+			//   Mismo control de pasada que en CalcularPromosAntesMP().
+			if(promo->desdeIni)
+			{
+				if(promo->pasadaSim == pasadaSimActual)
+				{
+					char tcob[160];
+					sprintf(tcob, "PROMOSIM - PROMO REPETIDA EN LA PASADA (cobradora): promo %d (cod %I64d), indice %d, se saltea",
+						promo->num, promo->CodPromo, i);
+					WriteBootLog(tcob);
+					continue;
+				}
+				promo->pasadaSim = pasadaSimActual;
+			}
 			// Si esta promo ya quedo integramente aplicada y grabada en un intento
 			// anterior de enviar este mismo ticket a caja cobradora, no hay que
 			// volver a simularla ni reaplicarla (ver CHANGELOG 2026-08-06).
@@ -1057,6 +1097,8 @@ PromoDef::PromoDef(int promoNum)
 	filterResult = NULL;			// ApplyAction() lo dereferencia: sin esto queda indeterminado.
 	accionesSaldoCajaMask = 0;
 	CodMP = 0;
+	desdeIni = false;				// Lo prende ReloadPromos(); CargaPromosExtra() lo deja en false.
+	pasadaSim = 0;					// 0 = todavia no se simulo (pasadaSimActual arranca en 1).
 	// ReloadPromos() los asigna siempre desde el .ini, pero CargaPromosExtra()
 	// (promos "fiel") no toca ExcluCli y solo asigna MarcaCli si viene > 0, asi
 	// que quedaban con basura. Ahora que ExcluCli se consulta en TODA promo, esa
