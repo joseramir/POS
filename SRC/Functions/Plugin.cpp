@@ -466,8 +466,12 @@ void CommonDescto(int codigo, double monto, double cant, bool simular)
 				//   simDesctoAcum es la suma de lo que puso ESTA pasada; el descuadre lo
 				//   detecta CalcularPromosAntesMP() al terminar el recorrido.
 				simDesctoAcum += auxmonto;
-				char tsim[200];
-				sprintf(tsim, "PROMOSIM - simula descuento: promo %d (cod %I64d) accion %d, plu %d, $%.2lf, acum $%.2lf, descuentos $%.2lf",
+				//   Va el numero de pasada: dos lineas con la MISMA pasada significan que la
+				//   promo se evaluo dos veces adentro de un mismo recorrido; con pasadas
+				//   distintas, que hubo dos recorridos y uno no arranco de cero.
+				char tsim[220];
+				sprintf(tsim, "PROMOSIM - simula descuento: pasada %lu, promo %d (cod %I64d) accion %d, plu %d, $%.2lf, acum $%.2lf, descuentos $%.2lf",
+					pasadaSimActual,
 					actualPromo? actualPromo->num: -1,
 					actualPromo? actualPromo->CodPromo: (long long)0,
 					accionActualSeq, codigo, auxmonto, simDesctoAcum, xTotal.VerDescuentoDouble());
