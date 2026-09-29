@@ -5,6 +5,38 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-09-24 - HU03: la NC de un ticket comun del mayorista salia NC A (112) en vez de 110
+
+Caso real: CO05 caja 3, 23/09. Ticket comun **114091** (83) del cliente mayorista (reparticion 17,
+condicion RI); la NC "Por solicitud de Factura" salio **NC A 0001-00000001 (112)** con razon social y
+CUIT, cuando correspondia la NC comun (110).
+
+### Causa
+
+`IncorporeTicketNC()` (`DUMP.CPP`) arma la NC copiando el ticket original con `InsertFrom`, y el
+registro del cliente (9999) pasa de `func=2` a `func=37` **conservando `OTROP=83`** en el DBF. Pero la
+tabla `xxDDNcPago` no tenia la entrada `otrop` (en el HU03 se agrego solo a `xxDDmpag`), asi que
+`trDecode` no la leia, y `ProcNcMpag()` decidia 112/113 solo por la condicion de IVA.
+
+El mismo olvido afectaba al informe de comprobantes del POS (`CalculateExpandedZeta`): el ticket comun
+del mayorista se contaba como **T/F -A-** (y su IVA en el bloque de facturas) y su NC como **NC -A-**.
+En el informe del 23/09: `T/F -A- [3] 612361.14 Desde: 1411 al 114091`, que incluye los 250.290,73 del
+ticket comun. No afecta el Z fiscal de la impresora.
+
+### Cambios
+
+1. `FUNCS.H`: `int tipoCompElegido` al final de `DDNcPago_` y `{ SZ_INT, 'I', "otrop" }` al final de
+   `xxDDNcPago` (29 -> 30 campos). Reusa la columna libre, **no cambia el esquema** del DBF.
+2. `MPAGO.CPP`, `ProcNcMpag()`: si el registro trae 83, `TipoComprobante = 110` y `GlobalTF = 0`;
+   `PrintEncab()` arma la NC comun sin datos del cliente.
+3. `DUMP.CPP`, `CalculateExpandedZeta()`: con 83, la venta cuenta como ticket a C/F y la NC como NC a
+   C/F (la fija el `tipoDoc` 110 del cierre).
+
+`FUNCS.H` esta en el PCH: requiere **rebuild completo**. Lo ya emitido (NC A 1 y factura A 1411) no se
+corrige con esto.
+
+---
+
 ## 2026-09-18 - Promos: una promo del promo.ini se simula una sola vez por pasada
 
 Continuacion de la entrada de mas abajo del mismo dia. Con dos casos nuevos (caja 1, 17/09, tickets

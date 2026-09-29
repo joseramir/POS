@@ -947,6 +947,8 @@ struct DDNcPago_ {
 	char montoextrac[14];
 	int codpostal;			//Codigo postal del cliente
 	int reparticion;		//reparticion del cliente
+	int tipoCompElegido;	//Copiado del ticket original por IncorporeTicketNC (83 = ticket comun del
+							//mayorista). Reusa la columna libre OTROP, igual que DDmpag_: NO cambia el esquema.
 
 };
 #ifdef IN_DUMP
@@ -981,6 +983,7 @@ dDbf_ xxDDNcPago = { DNcPago, {
 	{ SZ_CHAR*14, 'C', "millas" },    
 	{ SZ_INT,     'I', "ticket" },
 	{ SZ_INT,     'I', "tipo" },
+	{ SZ_INT,     'I', "otrop" },
 	{0}
 }};
 #endif

@@ -2124,7 +2124,9 @@ void CalculateExpandedZeta(bool discrimOnline)
 		{
 			if(d.mpag.nro == 9999)
 			{
-				globalTickFac = (d.mpag.civa[0] == 'R' && d.mpag.civa[1] == 'I')? 1: 2;
+				//   El ticket comun del cliente mayorista (83) se cuenta como ticket a C/F.
+				if(d.mpag.tipoCompElegido != 83)
+					globalTickFac = (d.mpag.civa[0] == 'R' && d.mpag.civa[1] == 'I')? 1: 2;
 			}
 			else
 			{
@@ -2152,7 +2154,11 @@ void CalculateExpandedZeta(bool discrimOnline)
 		if (d.f.id == DNcPago)
 		{
 			if ( d.pagoNc.nro == 9999 )
-				globalTickFac = (d.pagoNc.civa[0] == 'R' && d.pagoNc.civa[1] == 'I') ? 4 : 5;
+			{
+				//   La NC de un ticket comun del mayorista (83) es NC a C/F (110), no A/B.
+				if(d.pagoNc.tipoCompElegido != 83)
+					globalTickFac = (d.pagoNc.civa[0] == 'R' && d.pagoNc.civa[1] == 'I') ? 4 : 5;
+			}
 			else
 			{
 				bool isOnline = discrimOnline? (d.pagoNc.uOnline == 1 && (d.pagoNc.nro != 1)): false;

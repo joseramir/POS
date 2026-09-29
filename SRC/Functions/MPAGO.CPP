@@ -3216,7 +3216,15 @@ void ProcNcMpag(void *mpg_, int fwrite)
 			GlobalCCSelected = 1;			
 			mpg->uOnline = 0;
 
-			if(!_stricmp(c_condiva, "RI") || !_stricmp(c_condiva, "NI")){
+			//   Si el original fue el ticket comun del cliente mayorista (83), la NC tiene que ser
+			//   la comun (110) y no la A/B por condicion de IVA. La marca viene copiada del ticket
+			//   original en la columna OTROP. Con GlobalTF = 0, PrintEncab() arma 110 y no manda
+			//   los datos del cliente.
+			if(mpg->tipoCompElegido == 83){
+				pf->TipoComprobante = 110;
+				GlobalTF = 0;
+			}
+			else if(!_stricmp(c_condiva, "RI") || !_stricmp(c_condiva, "NI")){
 				pf->TipoComprobante = 112;
 				GlobalTF = 1;
 			}
