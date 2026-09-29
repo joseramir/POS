@@ -37,6 +37,32 @@ corrige con esto.
 
 ---
 
+## 2026-09-18 - Newland (Prisma): vuelta al protocolo homologado + protecciones que no tocan el cable
+
+Tras la actualizacion de los Newland, el equipo responde **NAK a toda trama cuyo LRC vale 0x03**
+(= `<ETX>`): 15/15 en la caja 7 del 20/09, 0 NAK con cualquier otro LRC. Con tarjeta EL cae 1 de cada
+16 ventas. Se destraba cambiando un centavo el monto. Consulta abierta con Prisma.
+
+Un cambio del 09-16 (nunca commiteado) mandaba `sp.Write` en vez de `sp.WriteLine` y reintentaba ante
+NAK: no arreglo el LRC 0x03, el equipo paso de contestar NAK a quedarse mudo, y la caja se colgaba
+(18/09 12:34). **Se vuelve a `sp.WriteLine` y al corte seco del NAK, como estaba homologado.**
+
+### Se conservan (`OperarTrxPrisma.cs`, ninguna cambia lo que ve el equipo)
+
+1. `ControlarRespuesta()` despues de `Comunicar()` en Test, Venta, ExtraCash, QR, Devol/Anul y Cierre:
+   el NAK del paso 3 terminaba "sin error y sin respuesta" y `HacerVenta` tiraba NullReference. Ahora
+   sale "EL NEWLAND NO DEVOLVIO RESPUESTA, VERIFICAR LA PANTALLA DEL EQUIPO".
+2. `rtaBase = null` al empezar `Comunicar()`, para no tomar la respuesta de la operacion anterior.
+3. `InicTmrSend()` al mandar el comando (paso 2): sin timer, si el equipo no contestaba nada la caja
+   quedaba colgada para siempre. No limita la espera de la autorizacion (paso 4).
+4. `VuelcaLog()`: el log lo escriben el hilo principal y el de `DataReceived`; con `File.AppendText`
+   chocaban ("El proceso no puede obtener acceso al archivo 'LogPrisma.txt'") y la excepcion cortaba
+   el cobro. Ahora `lock` + `FileShare.ReadWrite` + `try/catch` vacio.
+
+Compilado el 18/09, en las cajas desde el 19/09.
+
+---
+
 ## 2026-09-18 - Promos: una promo del promo.ini se simula una sola vez por pasada
 
 Continuacion de la entrada de mas abajo del mismo dia. Con dos casos nuevos (caja 1, 17/09, tickets

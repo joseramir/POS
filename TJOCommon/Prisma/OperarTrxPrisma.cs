@@ -181,7 +181,12 @@ namespace Alberdi.TJOCommon.Prisma
                                 numStep = 4;
                             }
                             else
+                            {
+                                //   El NAK al comando corta la operacion. NO se marca ConError
+                                //   aca a proposito: asi quedo homologado. De que Comunicar()
+                                //   no termine con rtaBase en null se ocupa ControlarRespuesta().
                                 continuar = false;
+                            }
                         }
                         //puede ocurrir que venga ACK con mensaje de error
                         else
@@ -236,6 +241,9 @@ namespace Alberdi.TJOCommon.Prisma
                 canSend = true;
                 continuar = true;
                 ConError = false;
+                //   rtaBase arranca en null para que ControlarRespuesta() pueda distinguir
+                //   "no hubo respuesta" de una respuesta vieja de otra operacion.
+                rtaBase = null;
 
                 while (continuar && !Cancelado)
                 {
@@ -247,6 +255,8 @@ namespace Alberdi.TJOCommon.Prisma
                             if (numStep == 0)
                             {
                                 EscribeLog(ENQ.ToString(), "PC==>VER");
+                                //   WriteLine, no Write: asi se homologo con el equipo. Ver
+                                //   CHANGELOG 2026-09-18, la vuelta atras del cambio del 09-16.
                                 sp.WriteLine(ENQ.ToString());
                                 canSend = false;
                                 numStep = 1;
@@ -259,6 +269,14 @@ namespace Alberdi.TJOCommon.Prisma
                                 sp.WriteLine(comando);
                                 canSend = false;
                                 numStep = 3;
+                                //   Sin esto el paso 3 esperaba el ACK del comando SIN ningun
+                                //   temporizador: si el Newland no contestaba nada, TimeSendExced
+                                //   nunca se prendia y el while de abajo giraba para siempre, con la
+                                //   caja colgada hasta reiniciarla (18/09 12:34, comando VEN con LRC
+                                //   0x03 sin respuesta). El handler de numStep 3 hace FinaTmrSend(),
+                                //   asi que esto no le pone limite a la espera de la autorizacion,
+                                //   que sigue igual que antes.
+                                InicTmrSend();
                                 //InicTmrAuto();
                             }
                             //este es el paso final envia la confirmacion de recibido al verifone
@@ -305,11 +323,24 @@ namespace Alberdi.TJOCommon.Prisma
             }
         }
 
+        //Comunicar puede terminar sin error y sin respuesta (p. ej. el Newland contesto algo que no es ACK).
+        //Para los comandos que esperan respuesta eso es un error.
+        private void ControlarRespuesta()
+        {
+            if (!ConError && rtaBase == null)
+            {
+                ConError = true;
+                MensajeError = "EL NEWLAND NO DEVOLVIO RESPUESTA, VERIFICAR LA PANTALLA DEL EQUIPO";
+                EscribeLog(MensajeError);
+            }
+        }
+
         public string HacerTest()
         {
             string comando = mtx.GetTest();
             EscribeLog("Hace comando Test");
             Comunicar(comando);
+            ControlarRespuesta();
             if (!ConError)
             {
                 RtaTest arta = (RtaTest)rtaBase;
@@ -327,6 +358,7 @@ namespace Alberdi.TJOCommon.Prisma
                 EscribeLog("Hace comando Venta");
                 EsUnaVenta = true;
                 Comunicar(comando);
+                ControlarRespuesta();
                 //hasta aqui no hay error en la comunicacion
                 if (!ConError)
                 {
@@ -362,6 +394,7 @@ namespace Alberdi.TJOCommon.Prisma
                 EscribeLog("Hace comando Venta con Extracash");
                 EsUnaVenta = true;
                 Comunicar(comando);
+                ControlarRespuesta();
                 //hasta aqui no hay error en la comunicacion
                 if (!ConError)
                 {
@@ -394,6 +427,7 @@ namespace Alberdi.TJOCommon.Prisma
                 EscribeLog("Hace comando Venta con QR");
                 EsUnaVenta = true;
                 Comunicar(comando);
+                ControlarRespuesta();
                 //hasta aqui no hay error en la comunicacion
                 if (!ConError)
                 {
@@ -436,6 +470,7 @@ namespace Alberdi.TJOCommon.Prisma
                         comando = mtx.GetMensajeAnulacion(rtaOrig.NumeroCupon, trxOrig.CodigoTarjeta);
                     }
                     Comunicar(comando);
+                    ControlarRespuesta();
                     if (!ConError)
                     {
                         RtaVenta mrta = (RtaVenta)rtaBase;
@@ -473,6 +508,7 @@ namespace Alberdi.TJOCommon.Prisma
             string comando = mtx.GetCierre();
             EscribeLog("Hace comando Cierre de lote");
             Comunicar(comando);
+            ControlarRespuesta();
             //hasta aqui no hay error en la comunicacion
             if (!ConError)
             {
@@ -628,20 +664,53 @@ namespace Alberdi.TJOCommon.Prisma
             return cadena.ToString();
         }
 
+        //   El log lo escriben DOS hilos: el principal, desde Comunicar(), y el del puerto serie,
+        //   porque .NET dispara SerialPort.DataReceived en un hilo del pool. File.AppendText abre
+        //   con FileShare.Read, asi que los dos a la vez daban "El proceso no puede obtener acceso
+        //   al archivo 'LogPrisma.txt' porque esta siendo utilizado en otro proceso" y la excepcion
+        //   cortaba el cobro en la pantalla de medios de pago.
+        private static readonly object bloqueoLog = new object();
+
+        //   Vuelca lineas al log serializando entre hilos y sin poder tirar excepcion: una linea de
+        //   log no puede voltear una venta. FileShare.ReadWrite ademas deja mirar el archivo mientras
+        //   la caja opera.
+        private void VuelcaLog(string[] lineas)
+        {
+            lock (bloqueoLog)
+            {
+                try
+                {
+                    using (FileStream fs = new FileStream(Directory.GetCurrentDirectory() + "\\LogPrisma.txt",
+                        FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+                    {
+                        using (StreamWriter writer = new StreamWriter(fs))
+                        {
+                            for (int i = 0; i < lineas.Length; i++)
+                                writer.WriteLine(lineas[i]);
+                        }
+                    }
+                }
+                catch
+                {
+                    //   Sin reintento ni aviso: si no se puede loguear, se sigue operando.
+                }
+            }
+        }
+
         private void EscribeLog(string line, string sentido)
         {
-            StreamWriter writer = File.AppendText(Directory.GetCurrentDirectory() + "\\LogPrisma.txt");
-            writer.WriteLine(String.Format("{0}= {1}: '{2}'", DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"), sentido, ToHexa(line)));
-            writer.WriteLine(String.Format("{0}= {1}: '{2}'", DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"), sentido, ToAscii(line)));
-            writer.Close();
+            VuelcaLog(new string[] {
+                String.Format("{0}= {1}: '{2}'", DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"), sentido, ToHexa(line)),
+                String.Format("{0}= {1}: '{2}'", DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"), sentido, ToAscii(line))
+            });
         }
 
         private void EscribeLog(string titulo)
         {
-            StreamWriter writer = File.AppendText(Directory.GetCurrentDirectory() + "\\LogPrisma.txt");
-            writer.WriteLine("-------------------------------------------------------------------");
-            writer.WriteLine(String.Format("{0}= {1}", DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"), titulo.ToUpper()));
-            writer.Close();
+            VuelcaLog(new string[] {
+                "-------------------------------------------------------------------",
+                String.Format("{0}= {1}", DateTime.Now.ToString("dd/MM/yyyy - HH:mm:ss"), titulo.ToUpper())
+            });
         }
     }
 }
