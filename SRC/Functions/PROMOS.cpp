@@ -218,7 +218,26 @@ int ReloadPromos()
 					pd->AddCantVta(line);
 
 				// Si la definicion es valida, entonces agrega a la lista de promociones definidas.
-				if(pd->ValidDef())
+				//   Red de seguridad: la misma seccion del promo.ini nunca puede quedar dos veces en la
+				//   lista. Pasaba con dos ReloadPromos() simultaneos (ver RecibePromos, SYNC.CPP) y el
+				//   descuento simulado de esa promo se contaba doble.
+				bool yaCargada = false;
+				for(int k=0; k<promos->Count(); k++)
+				{
+					PromoDef *otra = (PromoDef *)promos->Item(k);
+					if(otra->desdeIni && otra->num == i)
+					{
+						yaCargada = true;
+						break;
+					}
+				}
+				if(yaCargada)
+				{
+					sprintf(msg, "PROMOSIM - RELOAD: la promo %d ya estaba en la lista, no se agrega otra vez", i);
+					WriteBootLog(msg);
+					delete pd;
+				}
+				else if(pd->ValidDef())
 					promos->Add(pd);
 				else
 					delete pd;		// Recupera la memoria consumida.				

@@ -5,6 +5,56 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-01 - Promos: dos recargas simultaneas duplicaban promos y el descuento simulado salia doble
+
+Caso real: CO06 caja 7, 30/09, ticket **164903**. La promo 250 (`20260924000051`, "Promo 20%des Yogur LS")
+simulo su descuento **dos veces en la misma pasada** (traza `PROMOSIM`, pasadas 87 a 89, misma accion 1, sin
+el aviso de promo repetida): la pantalla de pagos pidio 10.833,32 y la fiscal esperaba 11.224,42 (un solo
+descuento de 391,10). Se cobro con MercadoPago el importe de menos, la caja quedo trabada y la venta se anulo.
+
+Es el mismo problema de CO27 caja 7 (18/09) y caja 1 (17/09, tickets 183744 y 183745), que habia quedado
+sin causa raiz.
+
+### Causa
+
+La lista `promos` se recargaba desde **dos hilos a la vez**:
+
+- `ResetPOSAcumInternal()` (`DUMP.CPP`) pone `inOper = 0` al cerrar el ticket, y recien despues
+  `ResetPOSAcum()` llama a `ReloadPromos()` si `forceReloadPromos` esta prendido.
+- Si el comando 15 (`RecibePromos()`, `SYNC.CPP`) llegaba en esa ventana, el hilo de sincronizacion veia
+  `inOper == 0` y tambien llamaba a `ReloadPromos()`.
+
+`promos` y `Dump::lascanastas` no son thread-safe: los dos `Clear()` y las dos cargas se pisaban y algunas
+promos quedaban **en dos `PromoDef` distintos**. `CalcularPromosAntesMP()` las simulaba a las dos; el sello
+de pasada de `fbcc1e7` es por objeto y no lo detectaba. La fase real grababa un solo descuento
+(`PromoTotalmenteAplicada()`). La lista quedaba asi hasta la recarga siguiente o un reinicio.
+
+Pruebas en los logs:
+
+- **CO27, 18/09 13:28** (`log7.pos`): "Cambio el nombre del promo.new" y "canastas.new" aparecen **dos
+  veces cada uno, intercalados**, cosa imposible con un solo hilo. El ticket malo es posterior.
+- **CO06, 30/09**: el 164903 es el primer ticket despues de la recarga de las 17:52 y es la unica
+  repeticion del dia (3 de 96 pasadas). Tras el reinicio de las 17:57, con el **mismo** `promo.ini`, la
+  promo simula una sola vez.
+- **Caja 1, 17/09**: la promo 107 salio bien antes de la recarga de las 20:16 y doble despues; los tickets
+  buenos de esa ventana usaron otras promos.
+
+### Cambios
+
+1. `SYNC.CPP`, `RecibePromos()`: la recarga inmediata toma **sin esperar** (`WaitOne(0)`) el mismo lock
+   que `mpago()`, `subtot()` y `plu()` (`GCStatic::PosProc`). Si lo obtiene y `inOper == 0`, recarga como
+   antes. Si esta tomado, la caja esta operando o cerrando un ticket: no recarga y deja
+   `forceReloadPromos = true`, y el hilo principal recarga **una sola vez** al cerrar el ticket. Se loguea
+   "RecibePromos - Caja operando: las promociones se recargan al cerrar el ticket".
+2. `PROMOS.cpp`, `ReloadPromos()`: red de seguridad, una seccion del `promo.ini` no se agrega dos veces a
+   la lista; si pasara, se loguea `PROMOSIM - RELOAD: la promo N ya estaba en la lista`.
+
+La recarga en caliente se mantiene (las promociones cambian durante el dia): se hace con la caja libre o al
+cerrar el ticket, nunca desde los dos hilos a la vez. Si el comando 15 llega con la caja libre pero el lock
+tomado (por ejemplo una consulta de precio), las promos nuevas entran al cerrar el ticket siguiente.
+
+---
+
 ## 2026-09-24 - HU03: la NC de un ticket comun del mayorista salia NC A (112) en vez de 110
 
 Caso real: CO05 caja 3, 23/09. Ticket comun **114091** (83) del cliente mayorista (reparticion 17,

@@ -470,6 +470,10 @@ void RecibePlusPuntual()
 }
 
 
+//   Lock del hilo principal (GCStatic::PosProc), administrados: ver su definicion junto a Cerrar().
+bool TomaLockPosSinEsperar();
+void LiberaLockPos();
+
 //   Recibe las promociones archivos promo.ini y canastas.dbf
 int RecibePromos()
 {
@@ -525,9 +529,31 @@ int RecibePromos()
 	DBG(DBGRxPlus, 1, "DBGRxPlus: Marcado en CMOS los nuevos articulos.");*/
 	forceReloadPromos = true; //recarga las promociones
 	WriteCmos(FRELPROMOS);
-	//Agregado para recargar las promociones solo si no esta cobrando
-	if (inOper == 0)
-		ReloadPromos();
+	//   Recarga en el acto solo si la caja esta libre. inOper == 0 no alcanza: ResetPOSAcumInternal()
+	//   lo pone en 0 (DUMP.CPP) ANTES de que ResetPOSAcum() recargue por forceReloadPromos, y si el
+	//   comando 15 caia en esa ventana corrian dos ReloadPromos() a la vez (este hilo y el principal).
+	//   La lista 'promos' no es thread-safe: quedaban promos en dos PromoDef y el descuento simulado
+	//   salia doble (CO27/7 18/09, CO06/7 30/09). Se toma sin esperar el mismo lock que mpago(),
+	//   subtot() y plu(): si esta tomado, el hilo principal esta operando y recarga el al cerrar el
+	//   ticket, porque forceReloadPromos ya quedo en true.
+	//   Esta funcion esta en la region nativa del archivo: el Mutex se maneja con los helpers
+	//   administrados TomaLockPosSinEsperar() / LiberaLockPos() (definidos junto a Cerrar()).
+	if (TomaLockPosSinEsperar())
+	{
+		try
+		{
+			if (inOper == 0)
+				ReloadPromos();
+		}
+		catch (...)
+		{
+			LiberaLockPos();
+			throw;
+		}
+		LiberaLockPos();
+	}
+	else
+		WriteBootLog("RecibePromos - Caja operando: las promociones se recargan al cerrar el ticket");
 	return 1;
 }
 
@@ -630,6 +656,33 @@ void Cerrar()
 	MainForm::F->DoClose();
 #else
 	POSExit();
+#endif
+}
+
+//   Toma, SIN esperar, el lock que usan mpago(), subtot() y plu() (GCStatic::PosProc). Lo usa
+//   RecibePromos() desde el hilo de sincronizacion para no recargar las promociones mientras el
+//   hilo principal esta operando: si retorna false, el hilo principal lo tiene tomado.
+bool TomaLockPosSinEsperar()
+{
+#ifdef POSXP
+	try
+	{
+		return GCStatic::PosProc->WaitOne(0);
+	}
+	catch (System::Threading::AbandonedMutexException ^)
+	{
+		return true;	// El dueno anterior murio sin liberarlo: igual queda tomado por este hilo.
+	}
+#else
+	return true;
+#endif
+}
+
+//   Libera el lock tomado con TomaLockPosSinEsperar().
+void LiberaLockPos()
+{
+#ifdef POSXP
+	GCStatic::PosProc->ReleaseMutex();
 #endif
 }
 
