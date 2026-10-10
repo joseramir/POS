@@ -5,6 +5,44 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-07 - Cobradora: si el envio fallaba se borraban articulos del ticket y el fiscal salia con uno solo
+
+Caso real: CO21 caja 8, 07/10, cliente 40358920, comprobante fiscal **3259**. Ticket con vendedor mayorista y
+20 articulos ($2.535.458,76). Al enviarlo a la caja cobradora fallo `TransSql.Exporta.ToBdSql`
+(`El proveedor 'VFPOLEDB.1' no esta registrado en el equipo local`: la caja no tiene el OLE DB de Visual
+FoxPro) y se cobro en la misma caja. Los pagos (MercadoPago QR + efectivo) cubrieron los 20 articulos, pero
+el fiscal imprimio **solo el primero** ($1.035.840) e informo un vuelto de $1.499.618,76. En el `trans.dbf`
+quedo un solo articulo; el ticket completo esta en `resu.tk`.
+
+### Causa
+
+Cuando el envio falla, `EnviarACobradora()` (`MPAGO.CPP`) deshace lo que el propio envio agrego al trans
+(factura a consumidor final, promos de cobradora y percepciones). Para eso recorria el ticket desde
+`ActualTrans` y borraba **todo a partir del primer** func 8, 26, 28, 31, 38 o 40.
+
+El func 40 (`DVendMay`, vendedor mayorista) no lo agrega el envio: lo graba `ProcPlu` inmediatamente despues
+del **primer articulo** fichado tras elegir el vendedor. El borrado empezaba ahi y se llevaba el resto de los
+articulos. La pantalla y `xTotal` conservaban los 20 items, por eso se cobro el total correcto, pero el
+fiscal se arma desde el trans.
+
+La rama `WFACT` (y su `!SendToFact`) tenia el mismo criterio con 8, 26 y 28: borraba de mas si alguno de
+esos func aparecia antes en el ticket.
+
+### Cambio
+
+- `EnviarACobradora()` guarda `tDbf.RecCount()` **antes** de grabar nada (antes del `DFactu1`).
+- Nueva `DescartaEnvioCobradora()`: si el envio falla, borra solo los registros posteriores a esa marca,
+  que son exactamente los que agrego el envio, y hace `Pack()` + `LimpiarNoAnulables()` como antes.
+- Se usa en los tres lugares: `catch` de `FACTSQL`, `!SendToFact` y `catch` de `WFACT`.
+
+### Pendiente
+
+- Regularizar el comprobante 3259 de CO21/8 (19 articulos sin facturar, vuelto informado que no se
+  entrego): lo resuelve contabilidad.
+- Instalar `VFPOLEDB` en CO21 caja 8 (y revisar las otras cajas de la tienda).
+
+---
+
 ## 2026-10-01 - Promos: dos recargas simultaneas duplicaban promos y el descuento simulado salia doble
 
 Caso real: CO06 caja 7, 30/09, ticket **164903**. La promo 250 (`20260924000051`, "Promo 20%des Yogur LS")

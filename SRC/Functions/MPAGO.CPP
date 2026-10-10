@@ -1352,12 +1352,31 @@ int mpgcmp2(void const *k, void const *p)
     return *((int *) k) - ((struct mpag_ *) p)->nro;
 }
 
+//   Si el envio a la caja cobradora falla, borra del trans lo que agrego el propio envio:
+//   la factura a consumidor final (func 8), las promos de cobradora (26) y las percepciones
+//   (28, 31, 38). Son exactamente los registros posteriores a 'recAntesEnvio'.
+//   Antes se borraba desde el primer func 8, 26, 28, 31, 38 o 40 en adelante, pero el 40
+//   (vendedor mayorista) lo graba ProcPlu pegado al PRIMER articulo del ticket: se perdian
+//   todos los articulos siguientes y, al cobrar en la misma caja, el fiscal salia con uno
+//   solo (ver CHANGELOG 2026-10-07).
+static void DescartaEnvioCobradora(unsigned long recAntesEnvio)
+{
+	if (tDbf.RecCount() <= recAntesEnvio)
+		return;
+	for(tDbf.Go(recAntesEnvio + 1); !tDbf.Eof(); tDbf.Skip(1))
+		tDbf.Delete();
+	tDbf.Pack();
+	Dump::cTicket->LimpiarNoAnulables();
+}
+
 // Envia el ticket a una cobradora externa.
 bool EnviarACobradora()
 {
 #ifdef FACTSQL
 	char tBuff[5], fBuff[5];
 	bool addedpercep = false;
+	//   Marca hasta donde llega el ticket antes de que el envio grabe nada en el trans.
+	unsigned long recAntesEnvio = tDbf.RecCount();
 	if(!GlobalTF)
 	{
 		// Debemos indicar que se le facture a un consumidor final
@@ -1394,22 +1413,7 @@ bool EnviarACobradora()
 	catch (System::Exception^ ex)
 	{
 		ClearMsg();		
-		bool aborrar = false;
-		for(tDbf.Go(ActualTrans); !tDbf.Eof(); tDbf.Skip(1))
-		{
-			tDbf.Get("func", fBuff);
-			int func = atoi(fBuff);				
-			if(!aborrar && (func == 8 || func == 28 || func == 26 || 
-				func == 31 || func == 38 || func == 40))
-				aborrar = true;
-			if (aborrar)
-				tDbf.Delete();				
-		}
-		if (aborrar)
-		{
-			tDbf.Pack();			
-			Dump::cTicket->LimpiarNoAnulables();
-		}
+		DescartaEnvioCobradora(recAntesEnvio);
 		//xTotal.ClearDescuento();
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
 		bPromoCobra = false;
@@ -1419,6 +1423,8 @@ bool EnviarACobradora()
 #endif
 #ifdef WFACT
 	char tBuff[5], fBuff[5];	
+	//   Marca hasta donde llega el ticket antes de que el envio grabe nada en el trans.
+	unsigned long recAntesEnvio = tDbf.RecCount();
 	if(!GlobalTF)
 	{
 		// Debemos indicar que se le facture a un consumidor final
@@ -1446,21 +1452,7 @@ bool EnviarACobradora()
 		MoveTicket("resu.tk", -1);
 		if(!plugin->SendToFact("resu.tk"))
 		{			
-			bool aborrar = false;
-			for(tDbf.Go(ActualTrans); !tDbf.Eof(); tDbf.Skip(1))
-			{
-				tDbf.Get("func", fBuff);
-				int func = atoi(fBuff);				
-				if(!aborrar && (func == 8 || func == 28 || func == 26))
-					aborrar = true;
-				if (aborrar)					
-					tDbf.Delete();								
-			}
-			if (aborrar)
-			{
-				tDbf.Pack();			
-				Dump::cTicket->LimpiarNoAnulables();
-			}
+			DescartaEnvioCobradora(recAntesEnvio);
 			//xTotal.ClearDescuento();
 			xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
 			ClearMsg();			
@@ -1485,21 +1477,7 @@ bool EnviarACobradora()
 	catch (System::Exception^ ex)
 	{
 		ClearMsg();
-		bool aborrar = false;
-		for(tDbf.Go(ActualTrans); !tDbf.Eof(); tDbf.Skip(1))
-		{
-			tDbf.Get("func", fBuff);
-			int func = atoi(fBuff);				
-			if(!aborrar && (func == 8 || func == 28 || func == 26))
-				aborrar = true;
-			if (aborrar)					
-				tDbf.Delete();								
-		}
-		if (aborrar)
-		{
-			tDbf.Pack();			
-			Dump::cTicket->LimpiarNoAnulables();
-		}
+		DescartaEnvioCobradora(recAntesEnvio);
 		//xTotal.ClearDescuento();
 		xTotal.AddRecargo(10002, BDecimal::BDecimal(0));
 		bPromoCobra = false;
