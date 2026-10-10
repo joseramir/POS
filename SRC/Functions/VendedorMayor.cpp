@@ -2,6 +2,7 @@
 #include "funcs.h"               // Carga la estructura ven_
 
 #include "frmIngVendMayor.h"
+#include "StaticDump.h"
 
 void IngVendedorMayor(int cual){
 	//static struct DVendMay_ vendMay;
@@ -35,4 +36,11 @@ void ProcVendedorMayor(void *fac5_, int fwrite)
 	fac5 = (struct DVendMay_ *) fac5_;
 	if (fwrite)	 
 		WriteDump(fac5);
+
+	//   Al reprocesar el trans (reinicio, ticket recuperado en la caja cobradora, precio
+	//   mayorista) el comprobante se rearma desde el trans y ProcPlu lo crea con vendedor 0:
+	//   el vendedor sale de este registro, que siempre va despues del primer articulo.
+	//   Al fichar en vivo docActual todavia no existe y lo carga ProcPlu (antNroVend).
+	if (Dump::docActual != nullptr && fac5->nro > 0)
+		Dump::docActual->NroVendedor = fac5->nro;
 }

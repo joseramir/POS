@@ -5,6 +5,31 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-07 - Vendedor mayorista: el comprobante lo perdia al reprocesar el trans
+
+Revisando el caso de cobradora del mismo dia: el registro del vendedor mayorista (func 40, `DVendMay`) llega
+bien al trans de la caja cobradora (`MoveTicket` -> `ToBdSql` -> `Importa.ToDbf` -> `IncorporeTicket`, nadie
+lo filtra), pero el numero de vendedor del comprobante (`HeaderDoc.NroVendedor`, que `ClienteComprobante`
+graba en `@nrovendedor`) salia **0**.
+
+### Causa
+
+`ProcPlu` carga `docActual->NroVendedor` solo al fichar en vivo (`antNroVend`). Cuando el trans se
+reprocesa -ticket recuperado en la cobradora, reinicio de la caja a mitad del ticket, cambio a precio
+mayorista- el comprobante se rearma desde el trans y `ProcVendedorMayor(&d, 0)` no hacia nada con el
+registro 40. Para el precio mayorista ya habia un parche puntual en `FACTU.CPP` que conservaba el vendedor a
+mano; los otros casos no lo tenian.
+
+### Cambio
+
+- `ProcVendedorMayor()` (`VendedorMayor.cpp`), ademas de grabar el registro cuando corresponde, carga
+  `Dump::docActual->NroVendedor` con el nro del registro si el comprobante ya existe. El func 40 siempre va
+  despues del primer articulo, asi que en el reproceso `docActual` ya esta creado.
+- Al fichar en vivo no cambia nada: ahi `docActual` todavia no existe y lo sigue cargando `ProcPlu`.
+- El vendedor queda asi en los dos lados: en el trans (registro 40) y en el comprobante.
+
+---
+
 ## 2026-10-07 - Cobradora: si el envio fallaba se borraban articulos del ticket y el fiscal salia con uno solo
 
 Caso real: CO21 caja 8, 07/10, cliente 40358920, comprobante fiscal **3259**. Ticket con vendedor mayorista y
