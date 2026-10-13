@@ -5,6 +5,31 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-13 - Prisma: una venta aprobada no quedaba en dbverifone.db despues de una anulacion
+
+### Problema
+
+En la prueba del 13/10 (por serie, sin la DLL) se intento anular y despues se hizo una venta: la terminal
+la aprobo (cupon 117) y la caja cobro bien, pero `AccesoDb.GuardarTransaccion` fallo con
+`database is locked` y la venta NO quedo en `dbverifone.db`. Sin ese registro despues no se puede anular
+desde la caja ("No se encontro la operacion indicada").
+
+### Causa
+
+`AccesoDb.GetTransaccion` (lo llama cada anulacion o devolucion para buscar la venta original) abria un
+`SQLiteDataReader`, leia una sola fila y nunca lo cerraba. Con la consulta a medio recorrer SQLite mantiene
+el bloqueo de lectura de la base hasta que el GC libera el reader, y cualquier escritura de ese lapso
+(el INSERT de la venta siguiente, o el UPDATE del estado tras una anulacion aprobada) da
+`database is locked`. Reproducido con una copia de la base. Codigo de siempre: tambien afecta a las cajas
+en produccion.
+
+### Cambio
+
+- `TJOCommon/Prisma/AccesoDb.cs`: el reader va en `using` en `GetTransaccion`, `GetTarjetas` y
+  `GetPlanes` (estos dos recorren hasta el final, pero una excepcion a mitad dejaba el mismo bloqueo).
+
+---
+
 ## 2026-10-07 - Vendedor mayorista: el comprobante lo perdia al reprocesar el trans
 
 Revisando el caso de cobradora del mismo dia: el registro del vendedor mayorista (func 40, `DVendMay`) llega

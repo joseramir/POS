@@ -103,17 +103,19 @@ namespace Alberdi.TJOCommon.Prisma
                 conn.Open();
                 SQLiteCommand cmd = conn.CreateCommand();
                 cmd.CommandText = "select * from tarjetas where habilitado = 1;";
-                SQLiteDataReader rdr = cmd.ExecuteReader();
                 lista = new List<RtaTablaTarjeta>();
-                while (rdr.Read())
+                using (SQLiteDataReader rdr = cmd.ExecuteReader())
                 {
-                    RtaTablaTarjeta trade = new RtaTablaTarjeta();
-                    trade.IndiceRegistro = Convert.ToInt32(rdr["Indice"]);
-                    trade.CodigoProcesador = rdr["CodigoProcesador"].ToString();
-                    trade.CodigoTarjeta = rdr["Codigo"].ToString();
-                    trade.NombreTarjeta = rdr["Nombre"].ToString();
-                    trade.CantidadCuotas = Convert.ToInt32(rdr["MaximaCuota"]);
-                    lista.Add(trade);
+                    while (rdr.Read())
+                    {
+                        RtaTablaTarjeta trade = new RtaTablaTarjeta();
+                        trade.IndiceRegistro = Convert.ToInt32(rdr["Indice"]);
+                        trade.CodigoProcesador = rdr["CodigoProcesador"].ToString();
+                        trade.CodigoTarjeta = rdr["Codigo"].ToString();
+                        trade.NombreTarjeta = rdr["Nombre"].ToString();
+                        trade.CantidadCuotas = Convert.ToInt32(rdr["MaximaCuota"]);
+                        lista.Add(trade);
+                    }
                 }
                 conn.Close();
             }
@@ -160,16 +162,18 @@ namespace Alberdi.TJOCommon.Prisma
                 conn.Open();
                 SQLiteCommand cmd = conn.CreateCommand();
                 cmd.CommandText = "select * from planes where CodigoTarjeta = '" + codTarjeta + "' and habilitado = 1;";
-                SQLiteDataReader rdr = cmd.ExecuteReader();
                 lista = new List<RtaTablaPlan>();
-                while (rdr.Read())
+                using (SQLiteDataReader rdr = cmd.ExecuteReader())
                 {
-                    RtaTablaPlan trade = new RtaTablaPlan();
-                    trade.IndiceRegistro = Convert.ToInt32(rdr["Indice"]);
-                    trade.CodigoTarjeta = rdr["CodigoTarjeta"].ToString();
-                    trade.CodigoPlan = rdr["CodigoPlan"].ToString();
-                    trade.NombrePlan = rdr["Nombre"].ToString();
-                    lista.Add(trade);
+                    while (rdr.Read())
+                    {
+                        RtaTablaPlan trade = new RtaTablaPlan();
+                        trade.IndiceRegistro = Convert.ToInt32(rdr["Indice"]);
+                        trade.CodigoTarjeta = rdr["CodigoTarjeta"].ToString();
+                        trade.CodigoPlan = rdr["CodigoPlan"].ToString();
+                        trade.NombrePlan = rdr["Nombre"].ToString();
+                        lista.Add(trade);
+                    }
                 }
                 conn.Close();
             }
@@ -294,32 +298,38 @@ namespace Alberdi.TJOCommon.Prisma
                     "estado, codigorespuesta, mensajerespuesta, codigoautorizacion, numerocupon, numerolote, nombrecliente, ult4digitos, prim6digitos, " +
                     "fechatransaccion, horatransaccion, terminalid, fhcaja, nrocierre, cerrado, cobrado from transacciones where clavebusq = '" +
                     clave + "' and tipoverifone = 1";
-                SQLiteDataReader rdr = cmd.ExecuteReader();
-                if (rdr.HasRows)
+                //   El reader se cierra siempre: con una sola fila leida la consulta queda a medio recorrer y
+                //   SQLite mantiene el bloqueo de lectura hasta que el GC lo libera; mientras tanto el
+                //   INSERT de la venta siguiente da "database is locked" (prueba del 13/10: anulacion y
+                //   despues una venta aprobada sin registro en dbverifone.db).
+                using (SQLiteDataReader rdr = cmd.ExecuteReader())
                 {
-                    rdr.Read();
-                    trx.Id = Convert.ToInt32(rdr["Id"]);
-                    trx.Monto = Convert.ToDecimal(rdr["monto"]);
-                    trx.NroFactura = rdr["nrofactura"].ToString();
-                    trx.CantCuotas = Convert.ToInt32(rdr["cuotas"]);
-                    trx.CodigoTarjeta = rdr["codigotarjeta"].ToString();
-                    trx.CodigoPlan = rdr["codigoplan"].ToString();
-                    trx.MontoExtraCash = Convert.ToDecimal(rdr["montoextracash"]);
-                    trx.CodigoComercio = rdr["codigocomercio"].ToString();
-                    trx.Estado = Convert.ToInt32(rdr["estado"]);
+                    if (rdr.HasRows)
+                    {
+                        rdr.Read();
+                        trx.Id = Convert.ToInt32(rdr["Id"]);
+                        trx.Monto = Convert.ToDecimal(rdr["monto"]);
+                        trx.NroFactura = rdr["nrofactura"].ToString();
+                        trx.CantCuotas = Convert.ToInt32(rdr["cuotas"]);
+                        trx.CodigoTarjeta = rdr["codigotarjeta"].ToString();
+                        trx.CodigoPlan = rdr["codigoplan"].ToString();
+                        trx.MontoExtraCash = Convert.ToDecimal(rdr["montoextracash"]);
+                        trx.CodigoComercio = rdr["codigocomercio"].ToString();
+                        trx.Estado = Convert.ToInt32(rdr["estado"]);
 
-                    rta.CodigoRespuesta = Convert.ToInt32(rdr["codigorespuesta"]);
-                    rta.MensajeRespuesta = rdr["mensajerespuesta"].ToString();
-                    rta.CodigoAutorizacion = rdr["codigoautorizacion"].ToString();
-                    rta.NumeroCupon = Convert.ToInt32(rdr["numerocupon"]);
-                    rta.NumeroLote = Convert.ToInt32(rdr["numerolote"]);
-                    rta.NombreCliente = rdr["nombrecliente"].ToString();
-                    rta.Ult4Digitos = rdr["ult4digitos"].ToString();
-                    rta.Prim6Digitos = rdr["prim6digitos"].ToString();
-                    rta.FechaTransaccion = rdr["fechatransaccion"].ToString();
-                    rta.HoraTransaccion = rdr["horatransaccion"].ToString();
-                    rta.Cerrado = Convert.ToBoolean(rdr["cerrado"]);
-                    aux = true;
+                        rta.CodigoRespuesta = Convert.ToInt32(rdr["codigorespuesta"]);
+                        rta.MensajeRespuesta = rdr["mensajerespuesta"].ToString();
+                        rta.CodigoAutorizacion = rdr["codigoautorizacion"].ToString();
+                        rta.NumeroCupon = Convert.ToInt32(rdr["numerocupon"]);
+                        rta.NumeroLote = Convert.ToInt32(rdr["numerolote"]);
+                        rta.NombreCliente = rdr["nombrecliente"].ToString();
+                        rta.Ult4Digitos = rdr["ult4digitos"].ToString();
+                        rta.Prim6Digitos = rdr["prim6digitos"].ToString();
+                        rta.FechaTransaccion = rdr["fechatransaccion"].ToString();
+                        rta.HoraTransaccion = rdr["horatransaccion"].ToString();
+                        rta.Cerrado = Convert.ToBoolean(rdr["cerrado"]);
+                        aux = true;
+                    }
                 }
                 conn.Close();
             }
