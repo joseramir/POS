@@ -458,9 +458,12 @@ void CierraCajero()
 				decl.func = DDecla;
 				decl.mpag = (y + 1);
 		        decl.cajero = ckaNro;
+				decl.control = (tipoA == 1);
+				decl.nro = mp->nro;
+				decl.resumido = resuArqueo? 1: 0;
 				store(importe, decl.imp);
 				store(teorico, decl.teorico);
-				sprintf(&decl.nombregrupo, "%s", mp->des);
+				sprintf(decl.nombregrupo, "%.29s", mp->des);
 				WriteDump(&decl);
 			
 				if(importe == 0) // && ((y == 0 && pdetaArqueo == 0) || (y > 0 && pdetaArqueo == 1)))
@@ -489,9 +492,11 @@ void CierraCajero()
 			decl.mpag = 999;
 			decl.cajero = ckaNro;
 			decl.control = (tipoA == 1);
+			decl.nro = 0;
+			decl.resumido = resuArqueo? 1: 0;
 			store(tImporte, decl.imp);
 			store(tTeorico, decl.teorico);
-			sprintf(&decl.nombregrupo, "TOTALES");
+			sprintf(decl.nombregrupo, "TOTALES");
 			WriteDump(&decl);
 		}
 
@@ -1106,6 +1111,7 @@ void Arqueo1(mpag_ *mp, int item, ::ArrayList *arq, ::ArrayList *aData, bool pri
 				sprintf(decl.item, "%s,%.0lf", des, cant);
 				decl.func = DDeclaDT;
 				decl.mpag = item;
+				decl.nro = mp->nro;
 		        decl.cajero = ckaNro;
 				store(tot, decl.imp);
 				WriteDump(&decl);
@@ -1401,6 +1407,7 @@ void Arqueo2(mpag_ *mp, int item, ::ArrayList *arq, ::ArrayList *aData, bool pri
 				sprintf(decl.item, "%.2lf,%.0lf", uni, (double)cant);
 				decl.func = DDeclaDT;
 				decl.mpag = item;
+				decl.nro = mp->nro;
 		        decl.cajero = ckaNro;
 				store(cant*uni, decl.imp);
 				WriteDump(&decl);

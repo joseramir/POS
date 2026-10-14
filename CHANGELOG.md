@@ -5,6 +5,37 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-14 - Arqueo: los registros del trans no traian el codigo del medio de pago
+
+### Problema
+
+En el `trans.dbf`, los renglones del arqueo (func 14 por medio y func 22 con el detalle de billetes o
+cupones) no permitian saber de que medio de pago eran sin depender de la descripcion. Lo necesita el
+aplicativo de arqueos que imputa en SAP.
+
+### Causa
+
+- Func 14: `MPAG` es la posicion del medio en la lista ordenada del arqueo (`y + 1`), no su codigo.
+- Func 22: `MPAG` es la posicion del medio dentro del arreglo `mpagos` (`(mp - mpagos) + 1`), que no
+  coincide con la del func 14. En el arqueo resumido el medio no esta en ese arreglo (es un consolidador
+  de `mpconso`) y la resta de punteros da un numero negativo sin sentido (-94, -51 en CO21 caja 6).
+- Ademas, `DDecla_.nombregrupo` era un solo `char` y el `sprintf` de la descripcion escribia hasta 24
+  bytes fuera de la estructura (en el stack); y `FLAG` (control) solo se cargaba en el renglon de TOTALES,
+  en los demas quedaba lo que hubiera en memoria.
+
+### Cambio
+
+- `SRC/Include/FUNCS.H`: campo nuevo `nro` en `DDecla_` y `DDeclaDT_`, grabado en la columna `NRO` del
+  trans (la misma donde el func 2 graba el medio de pago). `nombregrupo` pasa a `char[30]`.
+- `SRC/Functions/CAJERO.CPP`: func 14 y func 22 graban `NRO` = codigo del medio (`mp->nro`); en el arqueo
+  resumido es el `LINKECR` del grupo. En TOTALES (`MPAG = 999`) `NRO = 0`. El func 14 graba `FLAG` en
+  todos los renglones.
+- Func 14: `OTROP` = 1 si el arqueo es resumido (`NRO` es el codigo del grupo, no del medio) y 0 si es
+  detallado. Va en el renglon de TOTALES y, como `FLAG`, tambien en los de cada medio.
+- `MPAG` queda como estaba, para no romper a quien ya lo lea.
+
+---
+
 ## 2026-10-14 - Prisma: el numero de cierre de dbverifone.db no avanzaba
 
 ### Problema

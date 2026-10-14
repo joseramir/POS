@@ -392,7 +392,9 @@ struct DDecla_ {
 	char imp[14];			// Monto recontado.
 	char teorico[14];		// Monto teorico.
 	char control;			// 1=Si es arqueo de control, sino, cero.
-	char nombregrupo;		//Agrupacion del medio de pago, toma lo que se imprime
+	char nombregrupo[30];	//Agrupacion del medio de pago, toma lo que se imprime
+	int nro;				// Codigo del medio de pago (en arqueo resumido, el LINKECR del grupo). 0 en TOTALES.
+	int resumido;			// 1=Arqueo resumido (nro es el LINKECR del grupo), 0=detallado.
 };
 #ifdef IN_DUMP
 dDbf_ xxDDecla = { DDecla, {
@@ -402,6 +404,8 @@ dDbf_ xxDDecla = { DDecla, {
 	{ SZ_CHAR*14, 'C', "teorico" }, 
 	{ SZ_BOOL,    'T', "flag" },
 	{ SZ_CHAR*30, 'C', "nombre" },
+	{ SZ_INT,     'I', "nro" },
+	{ SZ_INT,     'I', "otrop" },
 	{0}
 }}; 
 #endif
@@ -412,6 +416,7 @@ struct DDeclaDT_ {
 	int cajero;				// Cajero arqueado.
 	char item[30];			// Codigo y cantidad item
 	char imp[14];			// Monto recontado.
+	int nro;				// Codigo del medio de pago (en arqueo resumido, el LINKECR del grupo).
 };
 #ifdef IN_DUMP
 dDbf_ xxDDeclaDT = { DDeclaDT, {
@@ -419,6 +424,7 @@ dDbf_ xxDDeclaDT = { DDeclaDT, {
 	{ SZ_INT,     'I', "cajero" },
 	{ SZ_CHAR*30, 'C', "nombre" },
 	{ SZ_CHAR*14, 'C', "imp" }, 
+	{ SZ_INT,     'I', "nro" },
 	{0}
 }}; 
 #endif
