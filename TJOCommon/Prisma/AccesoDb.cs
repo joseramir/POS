@@ -371,7 +371,7 @@ namespace Alberdi.TJOCommon.Prisma
                     actualcierre = 1;
                 else
                     actualcierre++;
-                cmd.CommandText = "update actualcierre set numact = " + actualcierre + " and tipoverifone = 1";
+                cmd.CommandText = "update actualcierre set numact = " + actualcierre + " where tipoverifone = 1";
                 cmd.ExecuteNonQuery();
                 cmd.CommandText = "delete from transacciones where fhcaja < datetime('now', '-30 days') and tipoverifone = 1";
                 cmd.ExecuteNonQuery();

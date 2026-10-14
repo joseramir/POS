@@ -5,6 +5,30 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-14 - Prisma: el numero de cierre de dbverifone.db no avanzaba
+
+### Problema
+
+En `dbverifone.db` el numero de cierre de lote (`actualcierre.numact`) queda siempre en 1, asi que todas
+las transacciones se graban con `nrocierre = 1` y no se puede saber a que cierre de lote pertenece cada
+cupon (lo necesita el aplicativo de arqueos).
+
+### Causa
+
+`AccesoDb.WriteCierre` grababa el numero nuevo con
+`update actualcierre set numact = N and tipoverifone = 1`: falta el `where`, y SQLite toma
+`N and tipoverifone = 1` como una expresion logica que da 1. Probado con una copia de la base.
+
+Hoy no tiene efecto visible: como todas las transacciones tienen `nrocierre = 1`, el cierre las marca a todas
+como cerradas y la caja sigue eligiendo bien entre anulacion (lote abierto) y devolucion (lote cerrado).
+
+### Cambio
+
+- `TJOCommon/Prisma/AccesoDb.cs`: `... set numact = N where tipoverifone = 1`. En el primer cierre despues
+  de instalarlo se cierran las transacciones con numero 1 (todas las anteriores) y se pasa al 2.
+
+---
+
 ## 2026-10-13 - Prisma: una venta aprobada no quedaba en dbverifone.db despues de una anulacion
 
 ### Problema
