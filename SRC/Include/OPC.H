@@ -262,6 +262,8 @@ extern double acumSaldoPromo;
 
 //para excluir la venta de articulos
 extern int nofichaarts[];
+//articulos que solo se fichan con el supervisor en X1 (superv-arts)
+extern int supervarts[];
 
 extern int tjPrisma;
 

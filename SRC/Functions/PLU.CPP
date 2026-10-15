@@ -113,6 +113,7 @@ int pruebaCondiva();
 int EstaEnDep(char *dep);
 int EstaEnDepExclu(char *dep);
 int EstaEnArtExclu(char *art);
+bool ChkArtSuperv(int cod, bool conSupervisor);
 
 // Corrige en una descripcion los caracteres que tienen distinta representacion regional, 
 // como las vocales asentuadas, enies, etc.
@@ -666,6 +667,10 @@ void plu_(int cual)
 		delete fnumpedido;
 	}
 
+	//   Los articulos de 'superv-arts' necesitan el supervisor logueado. Se toma ANTES del
+	//   bloque siguiente, que lo desloguea: la autorizacion vale para una sola fichada.
+	bool conSupervisor = (rMode == 1);
+
 	if(rMode)							// Estamos en X1? (Regresa a REG).
 	{
 		double tmp = xReg, tmp2 = yReg;
@@ -711,6 +716,7 @@ void plu_(int cual)
 			Alert("No ingreso el codigo del articulo a vender", "");
 			return;
 		}
+		if(!ChkArtSuperv(dplu.cod, conSupervisor)) return;
 		yReg = 1;         //  De la ultima fichada 
 		EstaRepitiendo = true;
 		WriteBootLog("PLU - Repite anterior...");
@@ -806,6 +812,7 @@ void plu_(int cual)
 			WriteBootLog("PLU - No encontrado");
 			return;
 		}
+		if(!ChkArtSuperv(atoi(usacod), conSupervisor)) return;
 
 		dbplu.Get("marca", msg);
 
@@ -1273,6 +1280,33 @@ int EstaEnArtExclu(char *art){
 		}		
 	}	
 	return encontrado;
+}
+
+//   Articulos de 'superv-arts' (opciones.ini): solo se fichan con el supervisor logueado (caja
+// en X1). Retorna false, con el aviso al cajero, si el articulo lo requiere y no hay supervisor.
+bool ChkArtSuperv(int cod, bool conSupervisor)
+{
+	bool requiere = false;
+	for(int i = 0; i < 100; i++)
+		if (supervarts[i] > 0 && supervarts[i] == cod)
+		{
+			requiere = true;
+			break;
+		}
+	if (!requiere) return true;
+
+	char tMsg[100];
+	if (!conSupervisor)
+	{
+		sprintf(tMsg, "[Codigo: %d] Llame al supervisor.", cod);
+		Alert("Necesito AUTORIZACION para fichar el articulo", tMsg);
+		sprintf(tMsg, "PLU - Articulo %d requiere supervisor: rechazado", cod);
+		WriteBootLog(tMsg);
+		return false;
+	}
+	sprintf(tMsg, "PLU - Articulo %d requiere supervisor: autorizado", cod);
+	WriteBootLog(tMsg);
+	return true;
 }
 
 

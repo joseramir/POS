@@ -234,6 +234,8 @@ double acumSaldoPromo;
 
 //para excluir la venta de articulos
 int nofichaarts[100] = {-1};
+//articulos que solo se fichan con el supervisor en X1 (superv-arts)
+int supervarts[100] = {-1};
 
 //para testear si esta en pantalla de clientes en Selfcheckout
 bool enSeleccionCliente;

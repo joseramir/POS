@@ -5,6 +5,31 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-15 - Articulos que solo se fichan con el supervisor (superv-arts)
+
+### Pedido
+
+El material 99991 ("Diferencia De Caja", $0,01) solo se tiene que poder fichar con la intervencion del
+supervisor.
+
+### Cambio
+
+- Clave nueva `superv-arts` en la seccion `[gral]` de `datgral.ini` (no en `opciones.ini`): lista de codigos
+  separados por coma, como `no-vende-arts`. **Sin la clave se toma el 99991**; con `superv-arts = 0` no se
+  controla ningun articulo.
+- `SRC/Functions/PLU.CPP`: `plu_` toma si la caja esta en X1 (supervisor logueado) ANTES del bloque que la
+  devuelve a REG, y `ChkArtSuperv` rechaza el articulo de la lista si no lo esta ("Necesito AUTORIZACION
+  para fichar el articulo / Llame al supervisor."). Se controla al buscar el articulo y tambien al repetir
+  la ultima fichada con la tecla PLU. Como `plu_` desloguea al supervisor, la autorizacion vale para una
+  sola fichada. El login/logout del supervisor ya queda en el trans (quien autorizo).
+- `SRC/Kernel/OPC.CPP`, `SRC/Functions/VARIAB.CPP`, `SRC/Include/OPC.H`: lectura de la clave y el arreglo
+  `supervarts`. La lectura va antes de `deptos-balanza` porque `GeneraFiltroDepto` limpia `deptopesables`
+  en cada llamada (defecto previo: `no-vende-deptos` y `no-vende-arts` ya borran `deptos-balanza`; sin
+  corregir).
+- Solo en caja: los tickets de la cobradora (preventa por SQL) no pasan por `plu_` y no se controlan.
+
+---
+
 ## 2026-10-14 - Arqueo: los registros del trans no traian el codigo del medio de pago
 
 ### Problema

@@ -415,6 +415,15 @@ int LoadOpc()
 
 		char *patchPrn  =    _strupr(ExtractIniStr (GRAL, "prnprot"));
 		if(strlen(patchPrn) != 0) interfaz = patchPrn;
+		//   Articulos que solo se pueden fichar con el supervisor logueado (caja en X1). Sin la
+		//   clave, el 99991 (Diferencia De Caja); con 'superv-arts = 0' no se controla ninguno.
+		//   Va ANTES de 'deptos-balanza': GeneraFiltroDepto limpia deptopesables en cada llamada.
+		char *supervartsini =		ExtractIniStr(GRAL, "superv-arts");
+		if (strlen(supervartsini) != 0)
+			GeneraFiltroDepto(supervartsini, supervarts);
+		else
+			GeneraFiltroDepto("99991", supervarts);
+
 		char *extractdeptos =		ExtractIniStr(GRAL, "vende-deptos");
 		if (strlen(extractdeptos) != 0)
 			GeneraFiltroDepto(extractdeptos, filtradepto);				
