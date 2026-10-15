@@ -5,6 +5,29 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-15 - deptos-balanza se perdia si la caja tenia no-vende-deptos o no-vende-arts
+
+### Problema
+
+En `datgral.ini`, `deptos-balanza` (departamentos que acepta la balanza) no tenia efecto en las cajas que
+ademas tienen `no-vende-deptos` o `no-vende-arts`: la balanza aceptaba cualquier departamento.
+
+### Causa
+
+`GeneraFiltroDepto` (`SRC/Kernel/OPC.CPP`) ponia `deptopesables` en -1 al empezar, en cada llamada, sin
+importar que arreglo estuviera cargando. Como `no-vende-deptos` y `no-vende-arts` se leen despues de
+`deptos-balanza`, lo borraban. Codigo de antes: afecta a las cajas en produccion con esa combinacion.
+
+### Cambio
+
+- `GeneraFiltroDepto` ya no limpia `deptopesables`: `LoadOpc` inicializa los arreglos al principio.
+- Se quita el comentario de `superv-arts` que pedia leerlo antes de `deptos-balanza` (ya no hace falta).
+- **Cambia el comportamiento** en las cajas con `deptos-balanza` y `no-vende-deptos`/`no-vende-arts`: a
+  partir de esta version la balanza solo acepta los departamentos de `deptos-balanza`. Revisar que esa
+  lista este bien en esas cajas antes de instalar.
+
+---
+
 ## 2026-10-15 - Articulos que solo se fichan con el supervisor (superv-arts)
 
 ### Pedido
@@ -24,8 +47,8 @@ supervisor.
   sola fichada. El login/logout del supervisor ya queda en el trans (quien autorizo).
 - `SRC/Kernel/OPC.CPP`, `SRC/Functions/VARIAB.CPP`, `SRC/Include/OPC.H`: lectura de la clave y el arreglo
   `supervarts`. La lectura va antes de `deptos-balanza` porque `GeneraFiltroDepto` limpia `deptopesables`
-  en cada llamada (defecto previo: `no-vende-deptos` y `no-vende-arts` ya borran `deptos-balanza`; sin
-  corregir).
+  en cada llamada (defecto previo: `no-vende-deptos` y `no-vende-arts` ya borran `deptos-balanza`; se
+  corrige aparte, ver la entrada de arriba).
 - Solo en caja: los tickets de la cobradora (preventa por SQL) no pasan por `plu_` y no se controlan.
 
 ---

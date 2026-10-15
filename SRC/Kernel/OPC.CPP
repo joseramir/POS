@@ -417,7 +417,6 @@ int LoadOpc()
 		if(strlen(patchPrn) != 0) interfaz = patchPrn;
 		//   Articulos que solo se pueden fichar con el supervisor logueado (caja en X1). Sin la
 		//   clave, el 99991 (Diferencia De Caja); con 'superv-arts = 0' no se controla ninguno.
-		//   Va ANTES de 'deptos-balanza': GeneraFiltroDepto limpia deptopesables en cada llamada.
 		char *supervartsini =		ExtractIniStr(GRAL, "superv-arts");
 		if (strlen(supervartsini) != 0)
 			GeneraFiltroDepto(supervartsini, supervarts);
@@ -485,9 +484,8 @@ void GeneraFiltroDepto(char *cadena, int *arrfiltro){
 	char mdep[7];
 	int i = 0;
 
-	for (int i = 0; i < 50; i++) 
-		deptopesables[i] = -1;
-
+	//   No limpia ningun otro arreglo: LoadOpc ya los inicializa al principio. (Antes limpiaba
+	//   deptopesables en cada llamada y 'no-vende-deptos'/'no-vende-arts' borraban 'deptos-balanza'.)
 	memset(mdep, 0, sizeof(mdep));
 
 	while (*cadena) {
