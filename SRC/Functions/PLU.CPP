@@ -992,6 +992,19 @@ void plu_(int cual)
 		if (dplu.pesado == 1 && CantDigDecBal == 1 && strlen(precBuf) > 0)
 			precBuf[strlen(precBuf) - 1] = '\0';
 		basePrec = BDecimal::Parse(precBuf);
+
+		//   PRECIO0: un articulo NO pesable sin precio no se registra (salia a $0.00 en el ticket, ver
+		//   ReprocTransMayor en FACTU.CPP). PALIATIVO: la causa sigue abierta; la traza deja lo leido.
+		//   El umbral es 0.005 para no bloquear articulos de $0.01 (material 99991).
+		if (!dplu.pesado && fabs(basePrec->ToDouble()) < 0.005)
+		{
+			sprintf(msg, "PRECIO0 - PLU: cod=%06ld usaPrec=%d listap=%d modoMayor=%d dun14=%d leido='%s' -> NO se registra",
+				(long)dplu.cod, usaPrec, listap, modoMayor, dun14 ? 1 : 0, precBuf);
+			WriteBootLog(msg);
+			sprintf(msg, "[Codigo: %06ld] Llame al supervisor", (long)dplu.cod);
+			Alert("El articulo NO tiene precio, NO se registra", msg);
+			return;
+		}
 		switch(balanPrec)
 		{
 			case 2:  dbplu.Get("precio2", precBuf);  break;

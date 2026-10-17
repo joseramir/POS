@@ -5,6 +5,56 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-17 - Articulos que salian a $0.00 en las cajas mayoristas (PRECIO0, paliativo)
+
+### Problema
+
+En CO05 dos articulos escaneados salieron en el ticket a $0.00 y no se cobraron:
+
+- Caja 7, ticket 98665 (17/10 12:08), material 29663: en el trans `IMP=-0.000` y precio unitario 0. La
+  cajera lo cobro aparte en el ticket 98666 (ahi salio a $19177.99).
+- Caja 2, ticket 316680 (15/10 22:06), material 11190: `IMP=0`. Se ficho una sola vez: salio sin cobrar.
+
+En los dos casos la caja cuadra (se cobro lo que imprimio la fiscal), pero la mercaderia sale gratis. Es
+uno solo por dia en cada caja (1075 y ~3000 registros).
+
+### Lo que tienen en comun
+
+- Tienda mayorista (canal `MA`), lista de precios 2.
+- Los dos articulos tienen `PVM=1` y `CF2=3` en el mplu: al fichar, `ReprocTransMayor` (`FACTU.CPP`) vuelve
+  a leer el precio y reescribe el trans.
+- Se escanearon justo despues de pesables del mismo ticket, que rearman el ticket con el precio mayorista
+  de pesables (`mayprecpesable`).
+
+### Causa
+
+**Sin identificar.** Defectos encontrados en el camino que reescribe el precio (`ReprocTransMayor` y
+`MostrarMayorEnPantalla`): el `Seek` del articulo no se controlaba ni fijaba el indice (si falla, el `Get`
+en EOF devuelve blancos), el precio se leia en el buffer global `msg`, y un precio 0 se grababa igual en el
+trans. Descartados: la balanza (no escribe `msg` y toma el lock del lazo principal), scanner, teclado,
+timers del form, parking/e-commerce (`xPrecEcom`) y la recarga de promos.
+
+### Cambio (paliativo)
+
+- `ReprocTransMayor` y `MostrarMayorEnPantalla`: precio en buffer local, `Setorder("mplucod")` y `Seek`
+  controlado. Si el precio da 0 **no se reescribe el trans** (queda el precio con que se ficho) y se graba
+  la traza `PRECIO0 - ReprocTransMayor: ...` / `PRECIO0 - MostrarMayorEnPantalla: ...` con codigo,
+  resultado del Seek, campo, texto leido, lista y configuracion mayorista.
+- `plu()` (`PLU.CPP`): un articulo NO pesable con precio 0 no se registra; aviso "El articulo NO tiene
+  precio, NO se registra" y traza `PRECIO0 - PLU: ...` con la lista usada y el texto leido. El umbral es
+  `fabs(precio) < 0.005`: no bloquea los articulos de $0.01 (material 99991) ni cambia los de precio
+  negativo.
+- **Cambia el comportamiento:** si algun articulo no pesable tiene precio 0 en el mplu a proposito, ya no
+  se puede fichar.
+
+### Que mirar en el log
+
+Buscar `PRECIO0`. Si sale `PRECIO0 - ReprocTransMayor` el ticket quedo bien y la traza dice por que se leyo
+0 (`seek=0`: no encontro el articulo; `leido` en blanco con `seek=1`: el campo vino vacio o no existe la
+columna `campo`). Si sale `PRECIO0 - PLU` el cajero vio el aviso y el articulo no se registro.
+
+---
+
 ## 2026-10-15 - deptos-balanza se perdia si la caja tenia no-vende-deptos o no-vende-arts
 
 ### Problema

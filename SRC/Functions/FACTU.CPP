@@ -359,17 +359,30 @@ void ReprocTransMayor(struct DDplu_ *vta, bool anulFlag)
 	if (Inicializando) return;
 
 	// Determina el nuevo precio del articulo, a fin de parchar las entradas que correspondan en el trans.
-	char _cod[30];
+	//   PRECIO0: el precio se lee en un buffer LOCAL, con el indice por codigo fijado y controlando el
+	//   Seek. Antes se leia en el global 'msg' sin mirar si el Seek encontraba el articulo (en EOF el
+	//   Get devuelve blancos) y un precio 0 se grababa igual en el trans: el articulo salia a $0.00
+	//   (CO05 caja 7 ticket 98665 mat. 29663, CO05 caja 2 ticket 316680 mat. 11190). PALIATIVO: con
+	//   precio < 0.005 NO se reescribe el trans (queda el precio con que se ficho) y se deja la traza
+	//   para identificar la causa.
+	char _cod[30], campoPrec[16], precBufMay[64];
 	sprintf(_cod, "%06d", vta->cod);
-	dbplu.Seek(_cod);
+	dbplu.Setorder("mplucod");
+	int foundMay = dbplu.Seek(_cod);
 	if(res->prec == 1)
-		dbplu.Get("precio", msg);
+		STRCPY(campoPrec, "precio");
 	else
+		sprintf(campoPrec, "precio%d", res->prec);
+	precBufMay[0] = '\0';
+	dbplu.Get(campoPrec, precBufMay);
+	double uPrec = atof(precBufMay);
+	if(fabs(uPrec) < 0.005)
 	{
-		sprintf(_cod, "precio%d", res->prec);
-		dbplu.Get(_cod, msg);
+		sprintf(msg, "PRECIO0 - ReprocTransMayor: cod=%06d seek=%d campo='%s' leido='%s' prec=%d cant=%.3lf cant1=%.3lf listap=%d modoMayor=%d precioBulto=%d precioX3Un=%d anul=%d -> NO se reescribe el trans",
+			vta->cod, foundMay, campoPrec, precBufMay, res->prec, res->cant, res->cant1, listap, modoMayor, precioBulto, precioX3Un, anulFlag ? 1 : 0);
+		WriteBootLog(msg);
+		return;
 	}
-	double uPrec = atof(msg);
 	System::Decimal decprec = 0, decimp = 0, deccant = 0;
 	decprec = System::Convert::ToDecimal(uPrec);
 
@@ -465,16 +478,26 @@ void MostrarMayorEnPantalla(){
 	for(int i=0; i<mayorTkt->Count(); i++)
 	{
 		TktItemResu *res = (TktItemResu *) mayorTkt->Item(i);
+		//   PRECIO0: mismo control que en ReprocTransMayor (buffer local, indice fijado, Seek
+		//   controlado y sin reescribir el trans con precio 0).
+		char campoPrec[16], precBufMay[64];
 		sprintf(_cod, "%06d", res->cod);
-		dbplu.Seek(_cod);
+		dbplu.Setorder("mplucod");
+		int foundMay = dbplu.Seek(_cod);
 		if(res->prec == 1)
-			dbplu.Get("precio", msg);
+			STRCPY(campoPrec, "precio");
 		else
+			sprintf(campoPrec, "precio%d", res->prec);
+		precBufMay[0] = '\0';
+		dbplu.Get(campoPrec, precBufMay);
+		double uPrec = atof(precBufMay);
+		if(fabs(uPrec) < 0.005)
 		{
-			sprintf(_cod, "precio%d", res->prec);
-			dbplu.Get(_cod, msg);
+			sprintf(msg, "PRECIO0 - MostrarMayorEnPantalla: cod=%06d seek=%d campo='%s' leido='%s' prec=%d cant=%.3lf -> NO se reescribe el trans",
+				res->cod, foundMay, campoPrec, precBufMay, res->prec, res->cant);
+			WriteBootLog(msg);
+			continue;
 		}
-		double uPrec = atof(msg);
 		System::Decimal decprec = 0, decimp = 0, deccant = 0;
 		decprec = System::Convert::ToDecimal(uPrec);
 
