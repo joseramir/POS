@@ -602,7 +602,10 @@ private: System::ComponentModel::IContainer^  components;
 									 actuTarjVerifonePrisma->OperacionTipo = actuTarjVerifonePrisma->ImporteCashBack > 0 ? "COMPRA+CASHBACK" : "COMPRA";
 									 actuTarjVerifonePrisma->NombreCliente = ""; //mrta->NombreCliente;									 
 									 actuTarjVerifonePrisma->AlbEtapa = 3;
-									 //actuTarjVerifonePrisma->NroTerminal = System::Convert::ToString(mrta->TerminalId);
+									 // Terminal Payway tal cual la manda PrismaECR (con los ceros a la izquierda); sin numero
+									 // (Gateway anterior) queda "0", el valor de siempre del cupon y del webapi de ventas
+									 int nroTerm = 0;
+									 actuTarjVerifonePrisma->NroTerminal = Int32::TryParse(mrta->NumeroTerminal, nroTerm) ? mrta->NumeroTerminal->Trim() : "0";
 									 this->faltante = faltante - actuTarjVerifonePrisma->ImporteIngresado;
 									 //para confirmar los descuentos por medio de pago
 									 if (actPromoMp != nullptr)
@@ -627,6 +630,10 @@ private: System::ComponentModel::IContainer^  components;
 								 else if (mrta->Estado == "RECHAZADA" || mrta->Estado == "ANULADA")
 								 {
 									 MessageBox::Show(mrta->Mensaje);
+								 }
+								 else if (mrta->Estado == "ERROR")
+								 {
+									 MessageBox::Show("No se sabe si la venta se cobro (" + mrta->Mensaje + ").\n\nVerifique en la Newland y en el backoffice antes de volver a cobrar.");
 								 }
 							 }
 						 }

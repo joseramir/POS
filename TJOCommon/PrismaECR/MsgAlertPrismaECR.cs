@@ -145,6 +145,13 @@ namespace Alberdi.TJOCommon.PrismaECR
                                     TerminoHilo = salirProcesando = true;
                                     break;
                                 }
+                                else if (rtaCons.Estado == "ERROR")
+                                {
+                                    // PrismaECR no pudo confirmar el resultado con Payway: no se sabe si cobro
+                                    ActualizaTitulos("RESULTADO DESCONOCIDO", "Verificar antes de volver a cobrar");
+                                    TerminoHilo = salirProcesando = true;
+                                    break;
+                                }
                             }
                             if (TerminoHilo)
                                 salirProcesando = true;
@@ -242,6 +249,13 @@ namespace Alberdi.TJOCommon.PrismaECR
                                 else if (rtaCons.Estado == "RECHAZADA")
                                 {
                                     ActualizaTitulos("FALLO ANULACION", "");
+                                    TerminoHilo = salirProcesando = true;
+                                    break;
+                                }
+                                else if (rtaCons.Estado == "ERROR")
+                                {
+                                    // PrismaECR no pudo confirmar el resultado con Payway: no se sabe si anulo
+                                    ActualizaTitulos("RESULTADO DESCONOCIDO", "Verificar antes de reintentar");
                                     TerminoHilo = salirProcesando = true;
                                     break;
                                 }

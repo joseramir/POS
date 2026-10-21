@@ -1056,6 +1056,11 @@ void AnularTarjetaPrismaEcr()
 						Alert("Se Anulo la operacion", "");
 						GrabarAnulacionPrismaEcr(0);
 					}
+					else if (rtaAnul->Estado == "ERROR")
+					{
+						// PrismaECR no pudo confirmar el resultado con Payway: no se sabe si se anulo
+						Alert("No se sabe si se anulo", "Verifiquelo antes de reintentar");
+					}
 					else
 					{
 						if (rtaAnul->Mensaje != nullptr){

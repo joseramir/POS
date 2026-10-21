@@ -5,6 +5,26 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-21 - PrismaECR: numero de terminal y estado ERROR
+
+Para el API Gateway de PrismaECR de master (commit 37f0d57), que todavia NO esta desplegado. Funciona con las
+dos versiones del Gateway: sin el campo, la terminal queda 0 como hasta ahora.
+
+- `PosPaymentResponse` y `PosAnulacionResponse`: campo `NumeroTerminal` (string, opcional). En la anulacion
+  tiene el mismo valor que `NumeroTerminalPrisma`, que se sigue mandando por compatibilidad.
+- `frmPrismaECR.h`: la venta aprobada guarda la terminal en `NroTerminal` (antes la linea estaba comentada y
+  quedaba "0"). `MPAGO.CPP` ya la grababa en el `PagoDoc` y en el cupon del trans.
+- Estado final nuevo `ERROR`: PrismaECR no pudo confirmar el resultado con Payway. `MsgAlertPrismaECR` corta
+  la consulta (antes seguia hasta el tiempo excedido y cancelaba la intencion, y el cajero podia cobrar de
+  nuevo una venta cobrada). La venta avisa que no se sabe si se cobro y que se verifique antes de volver a
+  cobrar; la anulacion avisa lo mismo y no graba nada en el trans.
+
+### Pendiente
+
+- Compilado el 2026-10-21 y probado el numero de terminal: OK. Falta probar el estado `ERROR`.
+
+---
+
 ## 2026-10-17 - Articulos que salian a $0.00 en las cajas mayoristas (PRECIO0, paliativo)
 
 ### Problema

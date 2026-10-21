@@ -8,7 +8,7 @@ namespace Alberdi.TJOCommon.PrismaECR
     public class PosPaymentResponse
     {
         public string IdOperacionPayway { get; set; }  // UUID devuelto por el Gateway (clave para el polling)
-        public string Estado { get; set; }             // PENDIENTE, APROBADA, RECHAZADA, ANULADA
+        public string Estado { get; set; }             // PENDIENTE, APROBADA, RECHAZADA, ANULADA, ERROR (indeterminado)
         public string Mensaje { get; set; }
 
         // Datos de aprobación para imprimir el ticket
@@ -20,5 +20,6 @@ namespace Alberdi.TJOCommon.PrismaECR
         public string Prim6Digitos { get; set; }       // BIN de la tarjeta usada
         public string Ult4Digitos { get; set; }        // Últimos 4 dígitos de la tarjeta
         public string MarcaTarjeta { get; set; }       // card_brand_product (relevante en pagos QR)
+        public string NumeroTerminal { get; set; }     // Terminal Payway de la caja; null en errores o con un Gateway anterior
     }
 }

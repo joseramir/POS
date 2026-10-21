@@ -20,5 +20,6 @@ namespace Alberdi.TJOCommon.PrismaECR
         public string Prim6Digitos { get; set; }
         public string Ult4Digitos { get; set; }
         public string NumeroTerminalPrisma { get; set; }  // Necesario para armar el request de reversión a Payway
+        public string NumeroTerminal { get; set; }        // Mismo valor que NumeroTerminalPrisma (este queda por compatibilidad)
     }
 }
