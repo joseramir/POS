@@ -293,6 +293,7 @@ int LoadOpc()
 		tjPrisma		=            ExtractIniSiNo(LAYOUT, "tjprisma");
 		tjSmartPoint	=            ExtractIniSiNo(LAYOUT, "tjsmartpoint");
 		EcrPrisma		=            ExtractIniSiNo(LAYOUT, "ecrprisma");
+		EcrClover		=            ExtractIniSiNo(LAYOUT, "ecrclover");
 		mpCashout		=            ExtractIniSiNo(LAYOUT, "mpcashout");
 		corriMode		= (int)      ExtractIniLong(LAYOUT, "corri-mode");
 		logoFile		=       Trim(ExtractIniStr (LAYOUT, "logo"));

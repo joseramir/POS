@@ -27,6 +27,14 @@ public:
 
 	static List<Alberdi::TJOCommon::VerifoneCommon::TransPrismaECR ^> ^TarjPrismaECR = gcnew List<Alberdi::TJOCommon::VerifoneCommon::TransPrismaECR ^>();
 
+	static List<Alberdi::TJOCommon::VerifoneCommon::TransCloverECR ^> ^TarjCloverECR = gcnew List<Alberdi::TJOCommon::VerifoneCommon::TransCloverECR ^>();
+
+	//   Venta Clover sin resultado final (VERIFICANDO, espera vencida, corte de red): no se vuelve a cobrar,
+	//   se consulta por su IdOperacion. CloverPendienteTicket = ticket en el que se cobro (-1 = ya no es
+	//   del ticket en curso: si se aprueba no se suma a ningun ticket).
+	static Alberdi::TJOCommon::VerifoneCommon::TransCloverECR ^CloverPendiente = nullptr;
+	static int CloverPendienteTicket = 0;
+
 	static Controles::MCanasta ^lascanastas = nullptr;	
 	static List<Controles::PromoExtra ^> ^promosfiel = nullptr;
 	static List<Controles::LeyenPromo ^> ^lstLeyenPromo = nullptr;

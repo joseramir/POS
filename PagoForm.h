@@ -28,6 +28,7 @@ using namespace System::Drawing;
 #include "frmCargaEfectivo.h"
 #include "frmTarjSmartPointMp.h"
 #include "frmPrismaECR.h"
+#include "frmCloverECR.h"
 #include "frmMpCashout.h"
 
 
@@ -75,6 +76,7 @@ namespace pos {
 
 		Button^ tarjOnline;
 		Button^ tarjPrisma;
+		Button^ tarjClover;
 		Button^ tarjSmartPointMp;
 		Button^ btMercadoPago;
 
@@ -172,6 +174,28 @@ namespace pos {
 
 			tb = bt;
 			tarjPrisma = bt;
+			tbl->Controls->Add(tb);
+			tbl->SetColumn(tb, 2);
+			tbl->SetRow(tb, row);
+		}
+
+		// Boton de las tarjetas Clover (CloverECR); puede estar junto con el de Prisma
+		void AddTjClover(int row)
+		{
+			PrepareLabel("Tarjetas Clover: ", row);
+
+			Button ^bt = gcnew Button();
+			bt->BackColor = Color::BurlyWood;
+			bt->TextAlign = ContentAlignment::MiddleRight;
+			bt->Text = TotalTarjetasCloverECR(false).ToString("F2");
+			bt->Font = titFont;
+			bt->Height = 40;
+			bt->Width = 150;
+			bt->Anchor = AnchorStyles::None;
+			bt->Click += gcnew EventHandler(this, &pos::PagoForm::TjCloverClick);
+
+			tb = bt;
+			tarjClover = bt;
 			tbl->Controls->Add(tb);
 			tbl->SetColumn(tb, 2);
 			tbl->SetRow(tb, row);
@@ -444,6 +468,9 @@ namespace pos {
 			//limite = (tjPrisma && root) ? limite + (tjPrisma + tjSmartPoint) : limite;
 			limite = (tjPrisma && root) ? limite + (tjPrisma) : limite;
 			limite = (EcrPrisma && root) ? limite + 1 : limite;
+			limite = (EcrClover && root) ? limite + 1 : limite;
+			// Clover va en la fila siguiente a la de Prisma cuando la caja tiene las dos
+			int filaClover = (tjPrisma || EcrPrisma) ? 2 : 1;
 			//limite = (tjSmartPoint && root) ? limite + (tjSmartPoint) : limite;
 			int j = 0;
 			for(j=0; j< limite; j++) // j<pex->subItems; j++)
@@ -452,6 +479,8 @@ namespace pos {
 					AddTjPrisma(j);		
 				else if(limite > 1 && j == 1 && EcrPrisma && root)
 					AddTjECRPrisma(j);		
+				else if(limite > 1 && j == filaClover && EcrClover && root)
+					AddTjClover(j);
 				/*else if(limite > 1 && j == 2 && tjSmartPoint && root)
 					AddTjSmartPointMp(j);*/
 				else
@@ -521,7 +550,8 @@ namespace pos {
 		System::Decimal TotalTarjetasEnVerifones(bool SoloRecargo){
 			return System::Convert::ToDecimal(TotalTarjetasPrisma(SoloRecargo)) + 
 				System::Convert::ToDecimal(TotalTarjetasSmartPointMp(SoloRecargo)) +
-				System::Convert::ToDecimal(TotalTarjetasPrismaECR(SoloRecargo));
+				System::Convert::ToDecimal(TotalTarjetasPrismaECR(SoloRecargo)) +
+				System::Convert::ToDecimal(TotalTarjetasCloverECR(SoloRecargo));
 		}
 
 		
@@ -602,6 +632,22 @@ namespace pos {
 		}
 
 						
+
+		void TjCloverClick(Object ^sender, EventArgs ^e)
+		{
+			Decimal ingre = DynamicTotal() - (CalcIngresos() - TotalTarjetasEnVerifones(true));
+			// Con una venta Clover pendiente se abre igual, para poder consultarla
+			if (ingre > 0 || Dump::CloverPendiente != nullptr)
+			{
+				frmCloverECR ^fTarjClover = gcnew frmCloverECR(ingre > 0 ? ingre : Decimal(0));
+				fTarjClover->ShowDialog();
+
+				tarjClover->Text = TotalTarjetasCloverECR(false).ToString("F2");
+				ActuStatus();
+			}
+			else
+				Alert("No hay monto pendiente", "Para Autorizar Tarjeta");
+		}
 
 		void CobraEfectivoRecaClick(Object ^sender, EventArgs ^e)
 		{
@@ -838,7 +884,8 @@ namespace pos {
 
 			Decimal xtot = DynamicTotal() + 
 				(tjPrisma ? Decimal(TotalTarjetasPrisma(true)) : 0) + (tjSmartPoint ? Decimal(TotalTarjetasSmartPointMp(true)) : 0) +
-				(EcrPrisma ? Decimal(TotalTarjetasPrismaECR(true)) : 0);
+				(EcrPrisma ? Decimal(TotalTarjetasPrismaECR(true)) : 0) +
+				(EcrClover ? Decimal(TotalTarjetasCloverECR(true)) : 0);
 			Decimal devolver = xtot - ingre;
 			if (devolver <= 0)
 				devolver = 0;
@@ -1110,7 +1157,8 @@ namespace pos {
 				ingre += Decimal::Parse(tarjOnline->Text);*/
 
 			Decimal xtot = DynamicTotal() + (tjPrisma ? Decimal(TotalTarjetasPrisma(true)) : 0) + 
-				(tjSmartPoint ? Decimal(TotalTarjetasSmartPointMp(true)) : 0) + (EcrPrisma ? Decimal(TotalTarjetasPrismaECR(true)) : 0);
+				(tjSmartPoint ? Decimal(TotalTarjetasSmartPointMp(true)) : 0) + (EcrPrisma ? Decimal(TotalTarjetasPrismaECR(true)) : 0) +
+				(EcrClover ? Decimal(TotalTarjetasCloverECR(true)) : 0);
 			if (desctoTipre > 0)
 			{
 				lblDesctoTipre->Visible = true;
@@ -1147,6 +1195,9 @@ namespace pos {
 			
 			if((tjPrisma || EcrPrisma) && tarjPrisma != nullptr)
 				ingre += Decimal::Parse(tarjPrisma->Text);
+
+			if(EcrClover && tarjClover != nullptr)
+				ingre += Decimal::Parse(tarjClover->Text);
 			
 			//Decimal xtot = DynamicTotal() + (AutorPinPad ? (Decimal(TotalTarjetasPinPad(true)) - Convert::ToDecimal(desctoTipre)) : (Decimal(TotalTarjetasTipre(true)) - Convert::ToDecimal(desctoTipre)));
 			Decimal xtot = DynamicTotal();

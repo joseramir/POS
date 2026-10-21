@@ -1740,6 +1740,23 @@ void mpago_(int cual, TarjInfo *info)
 				FacturarRecargo(TIPORECA_FINANCIERO, recaMedioPago);
 				PrintTktTot(false);
 
+				//agregado para las tarjetas Clover
+				recaMedioPago = 0;
+				for each(TransCloverECR ^posClover in Dump::TarjCloverECR)
+				{
+					if (posClover->ImporteRecargo > 0)
+						recaMedioPago += Convert::ToDouble(posClover->ImporteRecargo);
+					WLog("RECAFIN.CLOVER - Cupon: ImporteRecargo=%.2lf ImporteIngresado=%.2lf acum=%.2lf (lote=%d cupon=%d tarj=%d mpago=%d)",
+						Convert::ToDouble(posClover->ImporteRecargo), Convert::ToDouble(posClover->ImporteIngresado),
+						recaMedioPago, posClover->NroLote, posClover->NroCupon, posClover->AlbNroTarjeta, posClover->AlbNroMpago);
+					double montodescto = Dump::promosmp->GetMontoDescSinConfirmarDouble(posClover->AlbNroMpago, posClover->AlbNroTarjeta);
+					if (posClover->ImporteIngresado > 0 && montodescto > 0)
+						Dump::promosmp->SetConfirmaDescto(posClover->AlbNroMpago, posClover->AlbNroTarjeta);
+				}
+				WLog("RECAFIN.CLOVER - Total a facturar=%.17lg (cupones=%d)", recaMedioPago, Dump::TarjCloverECR->Count);
+				FacturarRecargo(TIPORECA_FINANCIERO, recaMedioPago);
+				PrintTktTot(false);
+
 				//Agregado para los recargo de Smartpoint de Mercado Pago
 				recaMedioPago = 0;
 				for each(TransSmartPointMp ^posnet in Dump::TarjSmartPointMp)
@@ -1897,6 +1914,57 @@ void mpago_(int cual, TarjInfo *info)
 
 			//borra las operaciones que tiene cargadas en memoria
 			Dump::TarjPrismaECR->Clear();
+
+			///////////////////////////////////////////////////////////////////
+			// Tarjetas Clover: igual que PrismaECR, con Integracion 4 y tipoTerminal 3
+			for each(TransCloverECR ^pclover in Dump::TarjCloverECR){
+				xReg = System::Convert::ToDouble(pclover->Importe) * 100;
+				yReg = 0;
+				cDecim = 0;
+				pSubtot = true;
+
+				LibEntidades::Alberdi::PagoDoc ^itemPago = gcnew LibEntidades::Alberdi::PagoDoc();
+				itemPago->MedioPago = pclover->AlbNroMpago;
+				itemPago->Monto = pclover->Importe;
+				itemPago->CodTarjeta = pclover->AlbNroTarjeta;
+				itemPago->Cuotas = pclover->AlbNumCuota;
+				itemPago->Lote = pclover->NroLote;
+				itemPago->Cupon = pclover->NroCupon;
+				itemPago->Autorizacion = pclover->NroAutorizacion;
+				itemPago->Integracion = 4;		// Clover
+				itemPago->Terminal = System::Convert::ToInt32(pclover->NroTerminal);	// 0 si Clover no la informo
+				itemPago->QR = pclover->QrModo;
+				itemPago->Extracash = pclover->ImporteCashBack;
+				Dump::docActual->Pagos->Add(itemPago);
+
+				CPosnet ^posmpago = gcnew CPosnet();
+				posmpago->m_monto = Convert::ToDouble(pclover->Importe);
+				posmpago->m_cuotas = pclover->AlbNumCuota;
+				posmpago->m_extraccion = Convert::ToDouble(pclover->ImporteCashBack);
+				posmpago->m_recargo = Convert::ToDouble(pclover->ImporteRecargo);
+				posmpago->m_mpago = pclover->AlbNroMpago;
+				posmpago->m_codtarjeta = pclover->AlbNroTarjeta;
+				posmpago->m_nrotarjeta = pclover->GetFormaNroTarjeta();
+				posmpago->m_autorizacion = pclover->NroAutorizacion;
+				posmpago->m_lote = pclover->NroLote;
+				posmpago->m_cupon = pclover->NroCupon;
+				posmpago->m_credito = pclover->TarjCredito;
+				posmpago->longaut = pclover->longaut;
+				posmpago->m_tipoTerminal = 3;
+				posmpago->m_terminal = pclover->NroTerminal;
+				posmpago->m_esqr = (pclover->QrModo ? 1: 0);
+
+				if (posmpago->m_extraccion > 0)
+					extracash(posmpago->m_mpago, posmpago->m_extraccion);
+
+				mpago_2(posmpago->m_mpago, posmpago);
+			}
+
+			//borra las operaciones que tiene cargadas en memoria
+			Dump::TarjCloverECR->Clear();
+			// Una venta Clover pendiente ya no es de este ticket: si despues se aprueba, no se suma a otro
+			if (Dump::CloverPendiente != nullptr)
+				Dump::CloverPendienteTicket = -1;
 			///////////////////////////////////////////////////////////////////
 
 
@@ -2910,7 +2978,7 @@ static void AgregarPagoDocDesdeRenglon(struct DDmpag_ *mpg)
 			itemPago->CodTarjeta = (mpg->dtarjeta[0] - '0') * 10 + (mpg->dtarjeta[1] - '0');
 
 		// fmtCard de mpago_2: nrotarjeta,vencim,N,cuotas,tasa,recargo,lote,autorizacion,cupon,0,
-		// tipoTerminal (1 Posnet, 2 Prisma/ECR),terminal,esqr. SmartPoint (mpago_3) graba otra cosa
+		// tipoTerminal (1 Posnet, 2 Prisma/ECR, 3 Clover),terminal,esqr. SmartPoint (mpago_3) graba otra cosa
 		// (ExternalReference,IdPayment): si no tiene ese formato se toma como SmartPoint.
 		String ^csv = gcnew String(mpg->fecha);
 		csv = csv + gcnew String(mpg->nombre) + gcnew String(mpg->dni) + gcnew String(mpg->telef);
@@ -2927,7 +2995,8 @@ static void AgregarPagoDocDesdeRenglon(struct DDmpag_ *mpg)
 				itemPago->Autorizacion = aut;
 			if (System::Int32::TryParse(tok[8]->Trim(), entero))
 				itemPago->Cupon = entero;
-			itemPago->Integracion = (tok[10]->Trim() == "2") ? 1 : 0;
+			String ^tipoTerm = tok[10]->Trim();
+			itemPago->Integracion = (tipoTerm == "2") ? 1 : ((tipoTerm == "3") ? 4 : 0);	// 4 = Clover
 			if (System::Int32::TryParse(tok[11]->Trim(), entero))
 				itemPago->Terminal = entero;
 			itemPago->QR = (tok[12]->Trim() == "1");

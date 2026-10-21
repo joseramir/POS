@@ -405,6 +405,10 @@ double		TotalTarjetasPrismaECR(bool soloRecargo);
 void AnularTarjetaPrismaEcr();
 void CierreLotePrismaEcr();
 
+double		TotalTarjetasCloverECR(bool soloRecargo);
+void AnularTarjetaCloverEcr(int modo);		// 0 = anular, 1 = devolver, 2 = reimprimir el recibo
+void ResumenCloverEcr();
+
 bool SplitParam2(char *src, char *dst, int lenDst);
 /*
 double		TotalTarjetasOnline(bool soloRecargo);

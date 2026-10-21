@@ -10,6 +10,7 @@
 #include "frmAnulaPrisma.h"
 #include "frmAnulaSmartPoint.h"
 #include "frmAnulaPrismaECR.h"
+#include "frmAnulaCloverECR.h"
 #include "FUNCS.H"
 
 using namespace pos;
@@ -17,6 +18,7 @@ using namespace Alberdi::TJOCommon::Prisma;
 using namespace Alberdi::TJOCommon::VerifoneCommon;
 using namespace Alberdi::TJOCommon::ComunicaMercadoPago;
 using namespace Alberdi::TJOCommon::PrismaECR;
+using namespace Alberdi::TJOCommon::CloverECR;
 
 #else
 extern int caja;
@@ -1300,6 +1302,236 @@ int			GrabarAnulacionPrismaEcr(int cual)
 	return 0;
 }
 
+
+// ----------------------------------------------------------------------------------------------
+// Clover (CloverECR). Mismo esquema que PrismaECR: el POS habla con la WebAPI CloverECR, que habla
+// con Clover y con el Flex. No hay cierre de lote (Clover lo cierra solo): se consulta el resumen del dia.
+
+double		TotalTarjetasCloverECR(bool soloRecargo)
+{
+	System::Decimal tRecargo = 0, tMonto = 0, res = 0;
+	// Cada TotalTarjetas* pisa desctoTipre: aca solo se toca si hay cupones Clover, para no borrar el de los otros
+	if (Dump::TarjCloverECR->Count > 0)
+		desctoTipre = 0;
+	for (int k = 0; k < Dump::TarjCloverECR->Count; k++)
+	{
+		TransCloverECR ^tmpClover = Dump::TarjCloverECR[k];
+		tMonto = tmpClover->Importe;
+		tRecargo = tmpClover->ImporteRecargo;
+		desctoTipre += Convert::ToDouble(tmpClover->ImporteDescuento);
+		desctoTipre += Convert::ToDouble(tmpClover->AlbMontoDescto);
+		res += soloRecargo ? tRecargo : tMonto;
+	}
+	return System::Convert::ToDouble(res);
+}
+
+// Alert con un mensaje de Clover (String) en la segunda linea
+static void AlertClover(char *titulo, String ^mensaje)
+{
+	char *linea = new char[61];
+	linea[0] = 0;
+	if (mensaje != nullptr)
+		Strings::StringToChar(mensaje, linea, 60);
+	Alert(titulo, linea);
+	delete [] linea;
+}
+
+// Medio de pago y tarjeta del POS para una marca de Clover (VI, MC, ...; RQ = QR). Es la misma tabla
+// de tarjetas que usa PrismaECR (CodTarjPrisma = "0VI", "QRQ", ...).
+static void BuscaTarjetaClover(String ^marca, String ^medioPago, int &mpago, int &codtarj)
+{
+	mpago = codtarj = 0;
+	if (!tjOnline && defTarjetas.Count() <= 0)
+		CargaTjOnline();
+	String ^buscar = marca;
+	if (String::IsNullOrEmpty(buscar))
+		buscar = (medioPago == "QR") ? gcnew String("RQ") : String::Empty;
+	if (buscar->Length != 2)
+		return;
+	char cod[3];
+	Strings::StringToChar(buscar, cod, 2);
+	for (int k = 0; k < defTarjetas.Count(); k++)
+	{
+		TarjDef *def = (TarjDef *) defTarjetas.Item(k);
+		if (def->CodTarjPrisma != NULL && def->CodTarjPrisma[0] != 0 && strncmp(def->CodTarjPrisma + 1, cod, 2) == 0)
+		{
+			mpago = def->MPago;
+			codtarj = def->Codigo;
+			return;
+		}
+	}
+}
+
+// Graba la anulacion/devolucion en el trans, como GrabarAnulacionPrismaEcr, pero con el importe revertido
+// y el medio de pago de la tarjeta de la venta.
+static int	GrabarAnulacionCloverEcr(VentaParaReversion ^venta, EstadoOperacion ^rta)
+{
+	struct DDanul_ *fanul = new struct DDanul_();
+	int mpago = 0, codtarj = 0;
+	BuscaTarjetaClover(venta->MarcaTarjeta, venta->MedioPago, mpago, codtarj);
+	// Importe revertido: el de la devolucion, o el de la venta si fue una anulacion
+	System::Decimal importe = (rta->Monto > 0) ? rta->Monto : venta->Monto;
+
+	fanul->func = DAnul;
+	fanul->nro = mpago;
+	sprintf(fanul->dtarjeta, "%02d%s", codtarj, "000000");
+	fanul->_fecha = (long) date();
+	fanul->_hora = (long) time_();
+	fanul->cajero = ckaNro;
+	store(Convert::ToDouble(importe), fanul->importe);
+	WriteDump(fanul);
+
+	CloverClient::EscribeLog(rta->TipoOperacion + " grabada en el trans: clave=" + venta->ClaveBusq + " importe=" + importe.ToString("F2") +
+		" mpago=" + mpago.ToString() + " tarjeta=" + codtarj.ToString() + " estadoVenta=" + rta->EstadoVenta, "CAJA");
+	delete fanul;
+	return 0;
+}
+
+// Anulacion (modo 0), devolucion parcial o total (modo 1) o reimpresion del recibo (modo 2) de una venta Clover.
+// La venta se busca por lote + cupon + autorizacion en toda la sucursal; la operacion se hace en el Flex de esta caja.
+void AnularTarjetaCloverEcr(int modo)
+{
+	frmAnulaCloverECR ^frmIng = gcnew frmAnulaCloverECR(modo);
+	bool aceptado = (frmIng->ShowDialog() == System::Windows::Forms::DialogResult::OK);
+	String ^claveBusq = frmIng->ClaveBusq;
+	System::Decimal montoPedido = frmIng->Monto;
+	delete frmIng;
+	if (!aceptado || String::IsNullOrEmpty(claveBusq))
+		return;
+
+	MsgAlertCloverECR ^busca = gcnew MsgAlertCloverECR();
+	busca->ShowMsgBuscaVenta("Buscando la venta Clover", claveBusq, claveBusq);
+	VentaParaReversion ^venta = busca->RespuestaBusqueda;
+	if (busca->ConError || venta == nullptr)
+	{
+		AlertClover("No se pudo buscar la venta", busca->MensajeError);
+		return;
+	}
+
+	if (modo == 2)
+	{
+		// La reimpresion vale tambien para una venta ya anulada o devuelta (409)
+		if ((venta->HttpStatus != 200 && venta->HttpStatus != 409) || String::IsNullOrEmpty(venta->IdOperacion))
+		{
+			AlertClover("No se encontro la venta", venta->Mensaje);
+			return;
+		}
+		MsgAlertCloverECR ^reimp = gcnew MsgAlertCloverECR();
+		reimp->ShowMsgReimprimir("Reimprimiendo el recibo", "en el Flex de esta caja", venta->IdOperacion);
+		RespuestaPos ^r = reimp->RespuestaReimpresion;
+		if (reimp->ConError || r == nullptr)
+			AlertClover("No se pudo reimprimir", reimp->MensajeError);
+		else if (r->Aceptada)
+			Alert("Reimpresion enviada al Flex", "");
+		else
+			AlertClover("No se pudo reimprimir", r->Mensaje);
+		return;
+	}
+
+	// 409 = ya ANULADA o DEVUELTA, 404 = no existe en la sucursal
+	if (venta->HttpStatus != 200)
+	{
+		AlertClover("La venta no se puede revertir", venta->Mensaje);
+		return;
+	}
+	if (modo == 0 && venta->LoteCerrado)
+	{
+		Alert("El lote de la venta ya cerro", "Solo se puede hacer una DEVOLUCION");
+		return;
+	}
+	if (modo == 0 && venta->MontoDevuelto > 0)
+	{
+		Alert("La venta tiene devoluciones", "Solo se puede DEVOLVER el resto");
+		return;
+	}
+	if (modo == 1 && montoPedido > venta->MontoDisponible)
+	{
+		AlertClover("El monto supera lo disponible", "Disponible $ " + venta->MontoDisponible.ToString("F2"));
+		return;
+	}
+
+	// Confirmacion con los datos de la venta encontrada
+	System::Decimal aRevertir = (modo == 1 && montoPedido > 0) ? montoPedido : venta->MontoDisponible;
+	String ^s1 = String::Format("{0} {1} ****{2} $ {3}", venta->MedioPago, venta->MarcaTarjeta, venta->Ult4Digitos, venta->Monto.ToString("F2"));
+	String ^s2 = gcnew String((modo == 1) ? "Devolver $ " : "Anular $ ");
+	s2 = s2 + aRevertir.ToString("F2") + ". Confirma?";
+	char *l1 = new char[61];
+	char *l2 = new char[61];
+	Strings::StringToChar(s1, l1, 60);
+	Strings::StringToChar(s2, l2, 60);
+	int confirma = GetSiNo(l1, l2);
+	delete [] l1;
+	delete [] l2;
+	if (!confirma)
+		return;
+
+	String ^cajero = System::Convert::ToString(ckaNro);
+	MsgAlertCloverECR ^hacer = gcnew MsgAlertCloverECR();
+	if (modo == 1)
+	{
+		// Sin monto = todo lo disponible. Total con el lote abierto: CloverECR la hace como anulacion
+		System::Nullable<System::Decimal> monto;
+		if (montoPedido > 0)
+			monto = System::Nullable<System::Decimal>(montoPedido);
+		hacer->ShowMsgProcesaDevolucion("Procesando Devolucion Clover", "Siga las indicaciones del Flex", claveBusq, monto, cajero);
+	}
+	else
+		hacer->ShowMsgProcesaAnulacion("Procesando Anulacion Clover", "Siga las indicaciones del Flex", claveBusq, cajero);
+
+	EstadoOperacion ^rta = hacer->RespuestaOperacion;
+	if (hacer->ConError || rta == nullptr)
+		AlertClover("No se pudo completar la operacion", hacer->MensajeError);
+	else if (rta->Estado == Estados::Aprobada)
+	{
+		if (rta->TipoOperacion == "DEVOLUCION")
+			Alert("Se realizo la devolucion", "");
+		else
+			Alert("Se anulo la operacion", "");
+		GrabarAnulacionCloverEcr(venta, rta);
+	}
+	else if (!Estados::EsFinal(rta->Estado))
+		Alert("La operacion sigue sin resultado", "Verifiquela en el backoffice antes de reintentar");
+	else
+		AlertClover("No se pudo completar la operacion", rta->Mensaje);
+}
+
+// Totales del dia de la caja en Clover (reemplaza al cierre de lotes de PrismaECR)
+void ResumenCloverEcr()
+{
+	MsgAlertCloverECR ^consulta = gcnew MsgAlertCloverECR();
+	consulta->ShowMsgResumen("Consultando los totales Clover", "del dia", System::DateTime::Today);
+	Alberdi::TJOCommon::CloverECR::Resumen ^r = consulta->RespuestaResumen;
+	if (consulta->ConError || r == nullptr)
+	{
+		AlertClover("No se pudo leer el resumen", consulta->MensajeError);
+		return;
+	}
+	if (r->HttpStatus != 200)
+	{
+		AlertClover("No se pudo leer el resumen", r->Mensaje);
+		return;
+	}
+
+	System::Text::StringBuilder ^sb = gcnew System::Text::StringBuilder();
+	sb->AppendLine(String::Format("Sucursal {0} - Caja {1}", r->NumeroSucursal, r->NumeroCaja));
+	if (r->Fuente == "CLOVERECR")
+		sb->AppendLine("ATENCION: Clover no respondio, totales calculados con lo registrado en CloverECR.");
+	sb->AppendLine();
+	if (r->Grupos != nullptr)
+	{
+		for each (Alberdi::TJOCommon::CloverECR::ResumenGrupo ^g in r->Grupos)
+			sb->AppendLine(String::Format("Lote {0}  {1} {2}  cant {3}  ventas $ {4}  devol $ {5}  neto $ {6}",
+				g->NumeroLote, g->MedioPago, g->Marca, g->Cantidad, g->Ventas.ToString("F2"), g->Devoluciones.ToString("F2"), g->Neto.ToString("F2")));
+	}
+	if (r->Total != nullptr)
+	{
+		sb->AppendLine();
+		sb->AppendLine(String::Format("TOTAL  cant {0}  ventas $ {1}  devol $ {2}  neto $ {3}",
+			r->Total->Cantidad, r->Total->Ventas.ToString("F2"), r->Total->Devoluciones.ToString("F2"), r->Total->Neto.ToString("F2")));
+	}
+	sb->AppendLine(String::Format("Anulados: {0} por $ {1}", r->CantidadAnulados, r->MontoAnulados.ToString("F2")));
+	System::Windows::Forms::MessageBox::Show(sb->ToString(), "Resumen Clover del " + System::DateTime::Today.ToString("dd/MM/yyyy"));
+}
 
 double		TotalTarjetasSmartPointMp(bool soloRecargo)
 {

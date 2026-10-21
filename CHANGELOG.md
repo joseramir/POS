@@ -25,6 +25,65 @@ dos versiones del Gateway: sin el campo, la terminal queda 0 como hasta ahora.
 
 ---
 
+## 2026-10-20 - Cobro con Clover (CloverECR), igual que PrismaECR
+
+### Que es
+
+Clover (Fiserv, terminal Flex) se agrega como otro medio de cobro con tarjeta y QR, al lado de Prisma. Una
+caja puede tener las dos. El POS no habla con Clover: habla con la WebAPI propia CloverECR (repo
+CloverIntegracion), con el mismo esquema que PrismaECR: crea la operacion (202 con `idOperacion`) y consulta
+el estado cada 2 s hasta un estado final.
+
+### Configuracion
+
+- `datgral.ini`, LAYOUT: `ecrclover=si` (como `ecrprisma`).
+- `app.config` (uno por sucursal): `<appSettings file="ApiKeyCaja.config">` con `CloverEcrUrl` y,
+  opcional, `CloverTimeoutMs`.
+- `ApiKeyCaja.config` al lado del ejecutable, distinto en cada caja, con `CloverApiKey` (se genera en el
+  backoffice). **No se distribuye con las actualizaciones del POS.** Si falta, la operacion avisa
+  "Falta CloverApiKey".
+- Log: `LogCloverECR.txt` (rota a `.1` ... `.10` como `LogPrismaECR`). La API key no se loguea.
+
+### Cambios
+
+- `TJOCommon/CloverECR`: `CloverClient.cs` y `Contratos.cs` copiados del cliente `CloverECR.ClientePos` del
+  repo CloverIntegracion y adaptados a C# 3 (namespace, log, `Pagar` avisa el `IdOperacion` apenas se
+  acepta la venta y `EsperarPago` para volver a consultarla). `MsgAlertCloverECR`: ventana de espera como
+  `MsgAlertPrismaECR`; ESC pide cancelar la venta (solo antes de presentar la tarjeta). Referencia nueva a
+  `System.Web.Extensions`. `TransCloverECR`: cupon con `IdOperacion`, `ClaveBusq`, medio y billetera.
+- Pantalla de pago (`PagoForm.h`): boton "Tarjetas Clover", en la fila siguiente a la de Prisma si la caja
+  tiene las dos. `frmCloverECR` es copia de `frmPrismaECR` (tarjetas, cuotas, recargo, promos por medio
+  de pago); el codigo de marca es el mismo de la tabla de tarjetas (`CodTarjPrisma`, RQ = QR).
+- **Venta sin resultado final** (VERIFICANDO, espera de 10 min vencida o corte de red con la venta ya
+  creada): queda pendiente (`Dump::CloverPendiente`) y **no se ofrece cobrarla de nuevo**. Al pulsar
+  Agregar se vuelve a consultar; si se aprueba y es del mismo ticket se suma al pago. Si el ticket ya se
+  cerro o se cancelo, se avisa que esta aprobada y que hay que devolverla. ERROR = no se sabe si cobro:
+  se avisa que se verifique en la conciliacion del backoffice.
+- Se manda siempre `ecrTransactionId` (sucursal-caja-ticket-cupon): si el POST queda sin respuesta,
+  el cliente busca la venta en las transacciones del dia en lugar de reenviarla.
+- `MPAGO.CPP`: recargo financiero y grabacion de los cupones como PrismaECR, con `Integracion = 4` en el
+  `PagoDoc` del webapi de ventas, `tipoTerminal = 3` en el cupon del trans y la terminal Fiserv que informa
+  CloverECR (`numeroTerminal`; en tarjeta hoy llega null y queda 0). Se guarda tambien el numero de serie del
+  Flex (`numeroSerieFlex`). El reproceso de pagos lee `tipoTerminal = 3` como `Integracion = 4`.
+- Menu de correcciones (`CORRI.CPP`): "Anula Tarjeta Clover" (lote abierto y sin devoluciones),
+  "Devolucion Clover" (parcial o total; total con el lote abierto la hace CloverECR como anulacion),
+  "Reimprime Recibo Clover" y "Resumen del dia Clover" (reemplaza al cierre de lotes: Clover cierra el
+  lote solo). La venta se busca por lote + cupon + autorizacion en toda la sucursal y se muestra para
+  confirmar. La anulacion/devolucion se graba en el trans con el importe revertido y el medio de pago de
+  la tarjeta (`frmAnulaCloverECR`: copia de `frmAnulaPrismaECR` con el monto a devolver).
+
+### Pendiente
+
+- Compilado el 2026-10-21. Las opciones de Clover del menu de correcciones estan comentadas en `CORRI.CPP`
+  (no aparecen todavia): descomentarlas al habilitar Clover.
+- Sin probar en caja. Probar contra CloverECR de desarrollo y el Flex sandbox (sucursal 1,
+  caja 1): venta con tarjeta, QR, rechazo, ESC, venta pendiente, anulacion, devolucion parcial y total,
+  reimpresion y resumen.
+- Avisar al webapi de ventas que `Integracion = 4` es Clover.
+- Cashback y anulacion/devolucion de QR hoy los rechaza el sandbox de Clover (pendiente con Fiserv).
+
+---
+
 ## 2026-10-17 - Articulos que salian a $0.00 en las cajas mayoristas (PRECIO0, paliativo)
 
 ### Problema

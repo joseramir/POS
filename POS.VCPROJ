@@ -1368,6 +1368,19 @@
 				</File>
 			</File>
 			<File
+				RelativePath=".\SRC\Forms\frmAnulaCloverECR.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\SRC\Forms\frmAnulaCloverECR.h"
+				FileType="3"
+				>
+				<File
+					RelativePath=".\SRC\Forms\frmAnulaCloverECR.resx"
+					>
+				</File>
+			</File>
+			<File
 				RelativePath=".\SRC\Forms\frmAnulaSmartPoint.cpp"
 				>
 			</File>
@@ -1520,6 +1533,19 @@
 				>
 				<File
 					RelativePath=".\SRC\Forms\frmPrismaECR.resx"
+					>
+				</File>
+			</File>
+			<File
+				RelativePath=".\SRC\Forms\frmCloverECR.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\SRC\Forms\frmCloverECR.h"
+				FileType="3"
+				>
+				<File
+					RelativePath=".\SRC\Forms\frmCloverECR.resx"
 					>
 				</File>
 			</File>

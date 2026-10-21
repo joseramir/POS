@@ -338,6 +338,9 @@ extern int idParking;
 //Para habilitar la integracion de PrismaEcr
 extern bool EcrPrisma;
 
+//Para habilitar la integracion de Clover (CloverECR)
+extern bool EcrClover;
+
 extern bool dummyHabil;
 
 //Para habilitar la integracion de QR Cashout MercadoPago

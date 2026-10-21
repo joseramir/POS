@@ -28,6 +28,10 @@ int    autoAnul;			// Indica si le permite a un cajero 'vaciar' el ticket.
 void DoCorriAll()
 {
 	double tickTot = xTotal.VerTotal().ToDouble();
+
+	// Una venta Clover pendiente ya no es de este ticket: si despues se aprueba, no se suma a otro
+	if (Dump::CloverPendiente != nullptr)
+		Dump::CloverPendienteTicket = -1;
 	char tickMsg[40], tickAdic[40]; 	
 	
 	//no imprime ticket cuando sea selfckout
@@ -188,6 +192,11 @@ void corriall_(int dummy)
 		elanul->Add("Carga Seña de Pago");
 		elanul->Add("Anula Tarjeta PrismaECR");
 		elanul->Add("Cierre de Lotes PrismaECR");
+		/*elanul->Add("Anula Tarjeta Clover");
+		elanul->Add("Devolucion Clover");
+		elanul->Add("Reimprime Recibo Clover");
+		elanul->Add("Resumen del dia Clover");*/
+
 		//elanul->Add("Hacer Ticket/Factura de Nota Credito");
 		//elanul->Add("Anula MercadoPago");
 		int rtaanul = elanul->Anima();
@@ -235,6 +244,30 @@ void corriall_(int dummy)
 			case 8:
 				if (EcrPrisma)
 					CierreLotePrismaEcr();
+				else
+					Alert("Opcion no habilitada.", "");
+				break;
+			case 9:
+				if (EcrClover)
+					AnularTarjetaCloverEcr(0);
+				else
+					Alert("Opcion no habilitada.", "");
+				break;
+			case 10:
+				if (EcrClover)
+					AnularTarjetaCloverEcr(1);
+				else
+					Alert("Opcion no habilitada.", "");
+				break;
+			case 11:
+				if (EcrClover)
+					AnularTarjetaCloverEcr(2);
+				else
+					Alert("Opcion no habilitada.", "");
+				break;
+			case 12:
+				if (EcrClover)
+					ResumenCloverEcr();
 				else
 					Alert("Opcion no habilitada.", "");
 				break;

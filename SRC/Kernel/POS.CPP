@@ -637,6 +637,17 @@ void BootLogInit()
 		RenameClr("LogPrismaECR.1", "LogPrismaECR.2");
 		RenameClr("LogPrismaECR.txt", "LogPrismaECR.1");
 
+		RenameClr("LogCloverECR.9", "LogCloverECR.10");
+		RenameClr("LogCloverECR.8", "LogCloverECR.9");
+		RenameClr("LogCloverECR.7", "LogCloverECR.8");
+		RenameClr("LogCloverECR.6", "LogCloverECR.7");
+		RenameClr("LogCloverECR.5", "LogCloverECR.6");
+		RenameClr("LogCloverECR.4", "LogCloverECR.5");
+		RenameClr("LogCloverECR.3", "LogCloverECR.4");
+		RenameClr("LogCloverECR.2", "LogCloverECR.3");
+		RenameClr("LogCloverECR.1", "LogCloverECR.2");
+		RenameClr("LogCloverECR.txt", "LogCloverECR.1");
+
 		RenameClr("LogAPIVentas.9", "LogAPIVentas.10");
 		RenameClr("LogAPIVentas.8", "LogAPIVentas.9");
 		RenameClr("LogAPIVentas.7", "LogAPIVentas.8");
