@@ -5,6 +5,35 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-22 - Parking: ticket de estacionamiento cobrado sin avisar a Parking (sin POST)
+
+Caso: caja 24, 21/10 18:42, ticket 83/537-209346, estadia 29051. Se cobro bien pero en `LogParking.txt` no
+figura el POST `actualizar-estado`, asi que en Parking la estadia sigue pendiente.
+
+Causa: el cajero toco la tecla de Parking dos veces, la segunda con el ticket ya abierto. `IngIdParking()`
+ponia `idParking = 0` en la primera linea, antes de ver si habia un ticket abierto; con ticket abierto sale
+por el aviso "no esta habilitada la opcion", pero el id ya estaba borrado y al cerrar `DUMP.CPP` no manda el
+POST (exige `idParking > 0`).
+
+- `OperPromosServ.cpp` (`IngIdParking`): `idParking` se limpia recien cuando se va a pedir un id nuevo (antes
+  del dialogo `frmIngNumParking`), no al entrar a la funcion.
+- Mismo archivo: `idParking` vuelve a 0 si `GetDatosParking` da error de comunicacion, si no encuentra la
+  estadia, si viene sin precio o cantidad, o si `plu(0)` no abre el ticket. Antes el id quedaba cargado sin
+  item, y un ticket cargado a mano despues hacia el POST a Parking con esa estadia (paso el 21/10 18:31 con
+  la 28059 por error de comunicacion; esa vez el cajero volvio a tocar la tecla y no hubo dano).
+
+- Mismo archivo: el precio que manda Parking (`xPrecEcom` / `xsPrecEcom`) se limpia despues del `plu(0)` de la
+  estadia. Antes quedaba cargado hasta el fin del ticket y `PLU.CPP` lo aplicaba a todo lo que se fichara
+  despues: en un ticket con estacionamiento y otros articulos, esos articulos salian al precio de la
+  estadia. Hallado leyendo el codigo; en el log de la caja 24 del 21/10 no hubo tickets mixtos.
+
+### Pendiente
+
+- Sin compilar ni probar.
+- La estadia 29051 (ticket 209346, $5000 efectivo) hay que informarla a mano en Parking.
+
+---
+
 ## 2026-10-21 - PrismaECR: numero de terminal y estado ERROR
 
 Para el API Gateway de PrismaECR de master (commit 37f0d57), que todavia NO esta desplegado. Funciona con las

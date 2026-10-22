@@ -96,7 +96,9 @@ void ObtenerPedJanis(int cual)
 
 void IngIdParking(int cual)
 {
-	idParking = 0;
+	//   idParking NO se limpia aca: si el ticket ya esta abierto con una estadia, volver a tocar la
+	//   tecla borraba el id y al cerrar no se mandaba el POST a Parking. Se limpia recien cuando se
+	//   va a pedir un id nuevo.
 	if (ckaNro != 0)
 	{
 		if (inOper == 0)
@@ -143,6 +145,7 @@ void IngIdParking(int cual)
 				if (msgConsu[0])
 					AlertDosLineas(msgConsu);
 
+				idParking = 0;
 				frmIngNumParking^ fnumpedido = gcnew frmIngNumParking();
 				fnumpedido->ShowDialog();
 				if (fnumpedido->DialogResult == DialogResult::OK)
@@ -152,8 +155,11 @@ void IngIdParking(int cual)
 
 					LibEntidades::Alberdi::Parking::DatosParking ^datosP = cliParking->GetDatosParking(idParking);
 					//LibEntidades::Alberdi::Parking::ListParking^ listaP = cliParking->GetDatosParking(NumIdParking);
+					//   Si no se pudo traer la estadia, el id vuelve a 0: si no, quedaba cargado sin item y un
+					//   ticket posterior cargado a mano hacia el POST a Parking con esa estadia.
 					if (cliParking->ConError)
 					{
+						idParking = 0;
 						Alert("Error al obtener datos de Estacionamiento", "");
 						return;
 					}
@@ -168,10 +174,21 @@ void IngIdParking(int cual)
 							//xsJanisEsPesable = item->EsPesable;
 							Strings::StringToChar(datosP->PrecioUnitario.ToString("F2"), xsPrecEcom, 30);
 							plu(0);
+							//   El precio de Parking es solo para este item: si quedaba cargado, los articulos
+							//   que se fichaban despues en el mismo ticket salian al precio de la estadia.
+							xPrecEcom = 0;
+							xsPrecEcom[0] = '\0';
+							if (inOper == 0)		// plu no abrio el ticket: la estadia no quedo cargada.
+								idParking = 0;
 						}
+						else
+							idParking = 0;
 					}
 					else
+					{
+						idParking = 0;
 						Alert("No encuentro el ID Estacionamiento", "Verificar numero y que este listo para cobrar");
+					}
 				}
 			}
 			else
