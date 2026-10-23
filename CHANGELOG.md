@@ -5,6 +5,27 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-23 - Clover: anular una venta QR con el lote cerrado o con devoluciones previas
+
+CloverECR cambio como revierte las ventas QR (respuesta de Fiserv del 23/10): `POST /anulaciones` sobre una
+venta QR ya no hace void, crea una DEVOLUCION por lo disponible (monto - devuelto), aun con el lote cerrado o
+con devoluciones parciales previas. La operacion vuelve con `tipoOperacion = "DEVOLUCION"` y la venta queda
+`DEVUELTA`. Tarjeta no cambia.
+
+- `TjOnline.cpp` (`AnularTarjetaCloverEcr`): en la opcion Anular, los controles "El lote de la venta ya cerro"
+  y "La venta tiene devoluciones" valen solo para tarjeta. Con una venta QR se deja anular y se revierte lo
+  disponible (es el importe que ya mostraba la confirmacion).
+- Lo demas no depende del cambio: el POS solo mira que la operacion venga APROBADA, graba en el trans el
+  mismo registro de anulacion con el importe que informa CloverECR (confirmado: es lo devuelto, nunca 0) y
+  no manda nada al webapi de ventas. Al cajero le sale "Se realizo la devolucion", y en el resumen del dia
+  esas operaciones suman como devolucion y no como anuladas.
+
+### Pendiente
+
+- Sin compilar ni probar. Las opciones de Clover del menu siguen comentadas (`CORRI.CPP`).
+
+---
+
 ## 2026-10-22 - Parking: ticket de estacionamiento cobrado sin avisar a Parking (sin POST)
 
 Caso: caja 24, 21/10 18:42, ticket 83/537-209346, estadia 29051. Se cobro bien pero en `LogParking.txt` no

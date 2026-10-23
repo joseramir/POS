@@ -1434,12 +1434,15 @@ void AnularTarjetaCloverEcr(int modo)
 		AlertClover("La venta no se puede revertir", venta->Mensaje);
 		return;
 	}
-	if (modo == 0 && venta->LoteCerrado)
+	//   Una venta QR CloverECR la anula como devolucion de lo disponible, aun con el lote cerrado o con
+	//   devoluciones previas: esos dos controles valen solo para tarjeta.
+	bool esQR = (venta->MedioPago == "QR");
+	if (modo == 0 && !esQR && venta->LoteCerrado)
 	{
 		Alert("El lote de la venta ya cerro", "Solo se puede hacer una DEVOLUCION");
 		return;
 	}
-	if (modo == 0 && venta->MontoDevuelto > 0)
+	if (modo == 0 && !esQR && venta->MontoDevuelto > 0)
 	{
 		Alert("La venta tiene devoluciones", "Solo se puede DEVOLVER el resto");
 		return;
@@ -1469,7 +1472,8 @@ void AnularTarjetaCloverEcr(int modo)
 	MsgAlertCloverECR ^hacer = gcnew MsgAlertCloverECR();
 	if (modo == 1)
 	{
-		// Sin monto = todo lo disponible. Total con el lote abierto: CloverECR la hace como anulacion
+		// Sin monto = todo lo disponible. Total con el lote abierto: CloverECR la hace como anulacion,
+		// salvo en QR, que siempre queda como devolucion
 		System::Nullable<System::Decimal> monto;
 		if (montoPedido > 0)
 			monto = System::Nullable<System::Decimal>(montoPedido);
