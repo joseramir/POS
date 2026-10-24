@@ -72,6 +72,7 @@ namespace pos {
 		StringBuilder ^leoPesoSystel;
 		double pesoCandidato;
 		int cntPesoIgual;
+		double ultPesoTraza;
 
 	static StringBuilder ^sb = gcnew StringBuilder();
 
@@ -309,6 +310,7 @@ namespace pos {
 		void DoBorraPeso()
 		{
 			pesoLeido = 0;
+			ultPesoTraza = -1;
 			pnlBalanza->Visible = false;
 			lPeso->Visible = false;
 		}
@@ -455,6 +457,7 @@ namespace pos {
 			leoPesoSystel = gcnew StringBuilder();
 			pesoCandidato = 0;
 			cntPesoIgual = 0;
+			ultPesoTraza = -1;
 
 			// La 'MainForm' NUNCA debe tener el 'TopMost' en true, porque sino automaticamente dejan de
 			// valer los 'TopMost' de las otras ventanas...
@@ -1729,6 +1732,15 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 		 // 1,165 kg llego como 9,165). Con balanza-lecturas = N en [hardware] (default 1 = como siempre)
 		 // el peso solo se toma cuando llegan N lecturas iguales seguidas; mientras tanto queda en 0.
 		 System::Void AceptaPesoBalanza(double nuevo) {
+			 // Traza de cada lectura que cambia el peso (con la Systel, que repite el mismo valor, no
+			 // inunda el log): permite ver si llego otra lectura entre lo que mostro la pantalla y pesar_plu.
+			 if (nuevo != ultPesoTraza)
+			 {
+				 char traza[160];
+				 sprintf(traza, "BALANZA-RX - trama=[%s] -> %.3lf", UltTramaBal, nuevo);
+				 WriteBootLog(traza);
+				 ultPesoTraza = nuevo;
+			 }
 			 if (balanLecturas <= 1 || nuevo <= 0)
 			 {
 				 pesoCandidato = nuevo;

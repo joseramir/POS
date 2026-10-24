@@ -5,6 +5,24 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-24 - Balanza: traza de cada lectura recibida
+
+CO05 caja 9, 23/10: mismo patron que el 22/10 en tres pesadas (8626 con 40,160 kg en vez de 0,160 y con
+8,630 en vez de 0,630, los dos corregidos antes de cobrar; 8615 con 8,470 kg, cobrado, a verificar). Siempre
+un digito de la parte entera con un bit de mas. Segun la caja, la pantalla mostraba bien el peso y el ticket
+salio mal. Pantalla y ticket usan la misma variable (`pesoLeido`), pero la pantalla muestra la ultima lectura
+y `pesar_plu` toma la que haya al tocar la tecla: para que difieran tiene que llegar otra lectura en el medio.
+
+- `MainForm.h` (`AceptaPesoBalanza`): traza `BALANZA-RX - trama=[...] -> peso` cada vez que llega una lectura
+  con un peso distinto del anterior (se reinicia al borrar el peso despues de pesar). Con la Systel, que
+  repite el mismo valor, no llena el log.
+
+### Pendiente
+
+- Sin compilar ni probar. Cambiar el adaptador serie/USB o el cable de la balanza de CO05 caja 9.
+
+---
+
 ## 2026-10-23 - Balanza: peso con un digito cambiado (9,165 kg en vez de 1,165)
 
 CO05 caja 9, 22/10 21:51: la manzana 8871 se peso con la balanza y entro 9,165 kg ($45220,02) en vez de
