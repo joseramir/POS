@@ -108,6 +108,8 @@ bool reloadtjon; //para recargar las tarjetas online en caliente (al finalizar u
 //PARA tomar el peso de la balanza
 float pesoLeido;
 int TieneBalanza;
+int balanLecturas;
+char UltTramaBal[80];
 int deptopesables[50];
 char PesadoEnBalanza[12];
 

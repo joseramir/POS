@@ -135,6 +135,8 @@ extern bool reloadtjon;
 //PARA tomar el peso de la balanza
 extern float pesoLeido;
 extern int TieneBalanza;
+extern int balanLecturas;
+extern char UltTramaBal[];
 extern int deptopesables[];
 extern char PesadoEnBalanza[12];
 

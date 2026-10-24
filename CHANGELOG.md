@@ -5,6 +5,33 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-23 - Balanza: peso con un digito cambiado (9,165 kg en vez de 1,165)
+
+CO05 caja 9, 22/10 21:51: la manzana 8871 se peso con la balanza y entro 9,165 kg ($45220,02) en vez de
+1,165 kg; se anulo con NC y se refacturo. El POS calculo bien con el peso que leyo (campo TELEFONO del trans
+= 9.165). La diferencia es de 8 kg exactos: entre '1' (0x31) y '9' (0x39) cambia un solo bit, tipico de un
+error de transmision en la linea serie. El puerto de la balanza no usa paridad y el POS tomaba como peso
+cualquier lectura suelta.
+
+- `MainForm.h`: `AceptaPesoBalanza` (la usan `LeePesoBalanza` y `LeePesoBalanzaSystel`). Con
+  `balanza-lecturas = N` en `[hardware]` el peso solo se toma cuando llegan N lecturas iguales seguidas;
+  mientras tanto queda en 0 ("No se registra Peso"). Default 1 = como siempre.
+- `MainForm.h` (`GuardaTramaBalanza`) + `Balanza.cpp` (`pesar_plu`): traza `BALANZA - peso=..., lecturas=...,
+  trama=[...]` con lo ultimo que mando la balanza (los no imprimibles como `<xx>`), para confirmar la causa
+  la proxima vez.
+- `OPC.CPP`, `VARIAB.CPP`, `OPC.H`: clave `balanza-lecturas` y buffer `UltTramaBal`.
+
+### Pendiente
+
+- Sin compilar ni probar. Para activarlo en una caja: `balanza-lecturas = 2` en `[hardware]` del opc.ini.
+  Sirve si la balanza transmite el peso en forma continua (el POS nunca le pide el peso); si solo manda una
+  lectura por pesada, con 2 no pesaria nunca: volver a 1.
+- Revisar el cable/conector de la balanza de CO05 caja 9. Sospecha principal: en CO05 los gabinetes nuevos no
+  tienen puerto COM y algunas balanzas se conectan con un adaptador serie/USB. Hubo otro caso en la misma caja
+  el 23/10.
+
+---
+
 ## 2026-10-23 - Clover: anular una venta QR con el lote cerrado o con devoluciones previas
 
 CloverECR cambio como revierte las ventas QR (respuesta de Fiserv del 23/10): `POST /anulaciones` sobre una

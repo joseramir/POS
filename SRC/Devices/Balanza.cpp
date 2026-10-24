@@ -115,6 +115,8 @@ void pesar_plu(int cual)
 	sprintf(mimssg, "PLU-S1 - cual=%d, XReg=%lf, YReg=%lf, consmode=%d, pRepeat=%d, dRepeat=%d",
 		cual, xReg, yReg, consmode, pRepeat, dRepeat);
 	WriteBootLog(mimssg);
+	sprintf(mimssg, "BALANZA - peso=%.3lf, lecturas=%d, trama=[%s]", locpeso, balanLecturas, UltTramaBal);
+	WriteBootLog(mimssg);
 
 	double decpart, intpart;
 	decpart = modf(xReg, &intpart);

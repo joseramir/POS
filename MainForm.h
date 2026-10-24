@@ -70,6 +70,8 @@ namespace pos {
 		InvokeClearPeso ^doClearPeso;
 
 		StringBuilder ^leoPesoSystel;
+		double pesoCandidato;
+		int cntPesoIgual;
 
 	static StringBuilder ^sb = gcnew StringBuilder();
 
@@ -451,6 +453,8 @@ namespace pos {
 			closed = false;
 
 			leoPesoSystel = gcnew StringBuilder();
+			pesoCandidato = 0;
+			cntPesoIgual = 0;
 
 			// La 'MainForm' NUNCA debe tener el 'TopMost' en true, porque sino automaticamente dejan de
 			// valer los 'TopMost' de las otras ventanas...
@@ -1721,6 +1725,51 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 			 catch (...) {}
 		 }
 
+		 // Un error de transmision en la linea serie puede cambiar un digito del peso (CO05 caja 9, 22/10:
+		 // 1,165 kg llego como 9,165). Con balanza-lecturas = N en [hardware] (default 1 = como siempre)
+		 // el peso solo se toma cuando llegan N lecturas iguales seguidas; mientras tanto queda en 0.
+		 System::Void AceptaPesoBalanza(double nuevo) {
+			 if (balanLecturas <= 1 || nuevo <= 0)
+			 {
+				 pesoCandidato = nuevo;
+				 cntPesoIgual = 1;
+				 pesoLeido = (float)nuevo;
+				 return;
+			 }
+			 if (nuevo == pesoCandidato)
+			 {
+				 if (cntPesoIgual < balanLecturas)
+					 cntPesoIgual++;
+			 }
+			 else
+			 {
+				 pesoCandidato = nuevo;
+				 cntPesoIgual = 1;
+			 }
+			 pesoLeido = (cntPesoIgual >= balanLecturas) ? (float)nuevo : 0;
+		 }
+
+		 // Guarda lo ultimo que mando la balanza (los caracteres no imprimibles como <xx>) para la
+		 // traza de pesar_plu.
+		 System::Void GuardaTramaBalanza(System::String ^leido) {
+			 const char *hex = "0123456789ABCDEF";
+			 int n = 0;
+			 for (int i = 0; i < leido->Length && n < 70; i++)
+			 {
+				 int c = (int)leido[i];
+				 if (c >= 32 && c < 127)
+					 UltTramaBal[n++] = (char)c;
+				 else
+				 {
+					 UltTramaBal[n++] = '<';
+					 UltTramaBal[n++] = hex[(c >> 4) & 15];
+					 UltTramaBal[n++] = hex[c & 15];
+					 UltTramaBal[n++] = '>';
+				 }
+			 }
+			 UltTramaBal[n] = '\0';
+		 }
+
 		 System::Void LeePesoBalanza(System::String ^leido) {
 			 StringBuilder^ cad = gcnew StringBuilder();
 			 bool conpunto = false;
@@ -1742,25 +1791,28 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 					 break;
 				 }
 			 }
-			 pesoLeido = 0;
+			 GuardaTramaBalanza(leido);
+			 double nuevo = 0;
 			 if (cad->Length >= 4 && cad->Length <= 6)
 			 {
-				 pesoLeido = Convert::ToDouble(cad->ToString());
+				 nuevo = Convert::ToDouble(cad->ToString());
 				 if (!conpunto)
-					 pesoLeido = pesoLeido / 1000;
+					 nuevo = nuevo / 1000;
 			 }
+			 AceptaPesoBalanza(nuevo);
 			 if (confin)
 				 spBalan->DiscardInBuffer();
 		 }
 
 		 System::Void LeePesoBalanzaSystel(System::String^ leido) {
 
+			 GuardaTramaBalanza(leido);
 			 for each (Char ^itemleido in leido)
 			 {
 				 if (System::Convert::ToInt16(itemleido) == 2)
 					 leoPesoSystel->Length = 0;
 				 else if (System::Convert::ToInt16(itemleido) == 13){//'\x0D') {
-					 pesoLeido = Convert::ToDouble(leoPesoSystel->ToString()->Replace(".", ","));
+					 AceptaPesoBalanza(Convert::ToDouble(leoPesoSystel->ToString()->Replace(".", ",")));
 				 }
 				 else
 					 leoPesoSystel->Append(itemleido);

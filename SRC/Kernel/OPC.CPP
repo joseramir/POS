@@ -344,6 +344,7 @@ int LoadOpc()
 		if (TieneBalanza == 0)
 			TieneBalanza =  ExtractIniSiNo(COMPAT, "tienebalanza");
 		timeoutSelf		= (int)		 ExtractIniLong(COMPAT, "timeoutSelf", 30);
+		balanLecturas	= (int)		 ExtractIniLong(COMPAT, "balanza-lecturas", 1);
 
 		tieneBalanzaControl    =            ExtractIniSiNo(COMPAT, "tienebalcontrol");
 		COM_BCL			=(unsigned) ExtractIniLong(COMPAT, "balcontrol");
