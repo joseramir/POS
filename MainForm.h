@@ -72,7 +72,6 @@ namespace pos {
 		StringBuilder ^leoPesoSystel;
 		double pesoCandidato;
 		int cntPesoIgual;
-		double ultPesoTraza;
 
 	static StringBuilder ^sb = gcnew StringBuilder();
 
@@ -310,7 +309,6 @@ namespace pos {
 		void DoBorraPeso()
 		{
 			pesoLeido = 0;
-			ultPesoTraza = -1;
 			pnlBalanza->Visible = false;
 			lPeso->Visible = false;
 		}
@@ -457,7 +455,6 @@ namespace pos {
 			leoPesoSystel = gcnew StringBuilder();
 			pesoCandidato = 0;
 			cntPesoIgual = 0;
-			ultPesoTraza = -1;
 
 			// La 'MainForm' NUNCA debe tener el 'TopMost' en true, porque sino automaticamente dejan de
 			// valer los 'TopMost' de las otras ventanas...
@@ -1732,15 +1729,6 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 		 // 1,165 kg llego como 9,165). Con balanza-lecturas = N en [hardware] (default 1 = como siempre)
 		 // el peso solo se toma cuando llegan N lecturas iguales seguidas; mientras tanto queda en 0.
 		 System::Void AceptaPesoBalanza(double nuevo) {
-			 // Traza de cada lectura que cambia el peso (con la Systel, que repite el mismo valor, no
-			 // inunda el log): permite ver si llego otra lectura entre lo que mostro la pantalla y pesar_plu.
-			 if (nuevo != ultPesoTraza)
-			 {
-				 char traza[160];
-				 sprintf(traza, "BALANZA-RX - trama=[%s] -> %.3lf", UltTramaBal, nuevo);
-				 WriteBootLog(traza);
-				 ultPesoTraza = nuevo;
-			 }
 			 if (balanLecturas <= 1 || nuevo <= 0)
 			 {
 				 pesoCandidato = nuevo;
@@ -1759,27 +1747,6 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 				 cntPesoIgual = 1;
 			 }
 			 pesoLeido = (cntPesoIgual >= balanLecturas) ? (float)nuevo : 0;
-		 }
-
-		 // Guarda lo ultimo que mando la balanza (los caracteres no imprimibles como <xx>) para la
-		 // traza de pesar_plu.
-		 System::Void GuardaTramaBalanza(System::String ^leido) {
-			 const char *hex = "0123456789ABCDEF";
-			 int n = 0;
-			 for (int i = 0; i < leido->Length && n < 70; i++)
-			 {
-				 int c = (int)leido[i];
-				 if (c >= 32 && c < 127)
-					 UltTramaBal[n++] = (char)c;
-				 else
-				 {
-					 UltTramaBal[n++] = '<';
-					 UltTramaBal[n++] = hex[(c >> 4) & 15];
-					 UltTramaBal[n++] = hex[c & 15];
-					 UltTramaBal[n++] = '>';
-				 }
-			 }
-			 UltTramaBal[n] = '\0';
 		 }
 
 		 System::Void LeePesoBalanza(System::String ^leido) {
@@ -1803,7 +1770,6 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 					 break;
 				 }
 			 }
-			 GuardaTramaBalanza(leido);
 			 double nuevo = 0;
 			 if (cad->Length >= 4 && cad->Length <= 6)
 			 {
@@ -1818,7 +1784,6 @@ private: System::Void spBalan_DataReceived(System::Object^  sender, System::IO::
 
 		 System::Void LeePesoBalanzaSystel(System::String^ leido) {
 
-			 GuardaTramaBalanza(leido);
 			 for each (Char ^itemleido in leido)
 			 {
 				 if (System::Convert::ToInt16(itemleido) == 2)

@@ -5,6 +5,21 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-28 - Balanza: se sacan las trazas del log.pos
+
+Las trazas que se agregaron para el digito cambiado del peso (CO05 caja 9) ya cumplieron su funcion.
+
+- `MainForm.h`: fuera la traza `BALANZA-RX` de `AceptaPesoBalanza` y `GuardaTramaBalanza`.
+- `Balanza.cpp` (`pesar_plu`): fuera la traza `BALANZA - peso=..., lecturas=..., trama=[...]`.
+- `VARIAB.CPP` / `OPC.H`: fuera el global `UltTramaBal`.
+- Queda la clave `balanza-lecturas` en `[hardware]` (default 1) y su logica en `AceptaPesoBalanza`.
+
+### Pendiente
+
+- Sin compilar.
+
+---
+
 ## 2026-10-24 - Balanza: traza de cada lectura recibida
 
 CO05 caja 9, 23/10: mismo patron que el 22/10 en tres pesadas (8626 con 40,160 kg en vez de 0,160 y con
