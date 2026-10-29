@@ -144,6 +144,7 @@ extern bool variacionpp, applyvarpp, facturapp;
 
 //Para bloqueo de venta por codigo interno
 extern int VtaxCodInterno;
+extern int VtaxCodInternoIni;
 
 
 //para excluir la venta de deptos

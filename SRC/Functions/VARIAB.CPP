@@ -117,6 +117,7 @@ bool variacionpp, applyvarpp, facturapp;
 
 //Para bloqueo de venta por codigo interno
 int VtaxCodInterno;
+int VtaxCodInternoIni = -1;	// Valor de venta-codinterno mientras un supervisor la habilita (-1 = no habilitada)
 
 
 //para excluir la venta de deptos

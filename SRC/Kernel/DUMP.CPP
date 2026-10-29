@@ -2892,6 +2892,16 @@ void ResetPOSAcum()
 	ticketDevuelto = false;
 	numSuperv = 0;
 
+	//   No va en ResetPOSAcumInternal(): el reproceso de precio mayorista (FACTU.CPP) la llama a
+	//   mitad del ticket.
+	//   La venta por codigo interno que habilito un supervisor vale solo para ese ticket.
+	if (VtaxCodInternoIni >= 0)
+	{
+		VtaxCodInterno = VtaxCodInternoIni;
+		VtaxCodInternoIni = -1;
+		WriteBootLog("PLU - Fin del ticket: venta-codinterno vuelve a su valor");
+	}
+
 	ResetPOSAcumInternal();
 
 	///Variables internas para Percepcion II BB

@@ -768,6 +768,17 @@ void plu_(int cual)
 			return;
 		}
 
+		//   Con la tarjeta del supervisor (caja en X1) se habilita la venta por codigo interno por lo
+		//   que resta del ticket. ResetPOSAcum() devuelve venta-codinterno a su valor al cerrar
+		//   o anular el ticket.
+		if (found && !VtaxCodInterno && !EsEscaneado && conSupervisor)
+		{
+			VtaxCodInternoIni = VtaxCodInterno;
+			VtaxCodInterno = 1;
+			sprintf(msg, "PLU - Supervisor habilita la venta por codigo interno en el ticket [Codigo: %s]", usacod);
+			WriteBootLog(msg);
+		}
+
 		if (found && !VtaxCodInterno && !EsEscaneado)
 		{
 			dbplu.Get("vta_codigo", msg);

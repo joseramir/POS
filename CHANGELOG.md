@@ -5,6 +5,27 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-29 - Venta por codigo interno habilitada por el supervisor durante el ticket
+
+En los mayoristas `venta-codinterno=no` ([gral] de `datgral.ini`) obliga a fichar por scanner/EAN los articulos
+con `vta_codigo = F`. Ahora, si se pasa la tarjeta del supervisor (caja en X1) y se ficha un articulo tecleando el
+codigo, la venta por codigo interno queda habilitada hasta que se cierra o se anula el ticket.
+
+- `VARIAB.CPP` / `OPC.H`: `VtaxCodInternoIni` guarda el valor original (-1 = no habilitada).
+- `PLU.CPP` (`plu_`): con `conSupervisor`, articulo tecleado y `VtaxCodInterno = 0`, guarda el valor y pone 1.
+  Traza `PLU - Supervisor habilita la venta por codigo interno en el ticket [Codigo: ...]`.
+- `DUMP.CPP` (`ResetPOSAcum`): devuelve `VtaxCodInterno` a su valor. No va en `ResetPOSAcumInternal`, que el
+  reproceso de precio mayorista (`FACTU.CPP`) llama a mitad del ticket. Traza
+  `PLU - Fin del ticket: venta-codinterno vuelve a su valor`.
+- La habilitacion la dispara cualquier articulo tecleado con el supervisor logueado (tambien uno de
+  `superv-arts`, como el 99991).
+
+### Pendiente
+
+- Sin compilar ni probar.
+
+---
+
 ## 2026-10-29 - Pantalla: nro de T/F A/B que no correspondia al comprobante que se ficha
 
 El boton de la pantalla (`TI:` / `FB:` / `FA:`) mostraba `NumeroComprobante`, que es uno solo para los tres
