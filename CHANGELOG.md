@@ -5,6 +5,30 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-29 - Arqueo de cajero: hora de inicio y fin en el trans
+
+Para saber cuanto demora cada arqueo. Los registros del arqueo (func 14, uno por medio y el 999 TOTALES) llevan
+ahora el momento en que empezo y el momento en que el cajero termino de contar.
+
+- `FUNCS.H` (`DDecla_` / `xxDDecla`): `fechaIni`, `horaIni` y `horaFin` al final del struct, en columnas que el
+  func 14 no usaba (no cambia el esquema del DBF):
+  - `FECHA_Z` = fecha de inicio (AAAAMMDD)
+  - `ZETA` = hora de inicio (HHMMSS)
+  - `POSI` = hora de fin (HHMMSS), al elegir "Grabar y Salir"
+- `CAJERO.CPP` (`CierraCajero`): toma el inicio antes de abrir la pantalla de recuento (`FullArqueo`), ya elegido
+  el tipo de arqueo, y el fin cuando vuelve.
+- Las columnas genericas `FECHA` / `HORA` siguen siendo las de grabacion del registro (despues de calcular los
+  teoricos e imprimir). Si el arqueo cruza la medianoche, la fecha de fin es `FECHA`.
+- Los registros 14 anteriores traen 0 en las tres columnas. El detalle (func 22) no cambia.
+- Impresion: despues de `DIFERENCIA FINAL` sale `DURACION ARQUEO.:  HH:MM:SS` (con `muestra-arqueo`, tambien en
+  la pantalla).
+
+### Pendiente
+
+- Sin compilar ni probar.
+
+---
+
 ## 2026-10-29 - Venta por codigo interno habilitada por el supervisor durante el ticket
 
 En los mayoristas `venta-codinterno=no` ([gral] de `datgral.ini`) obliga a fichar por scanner/EAN los articulos

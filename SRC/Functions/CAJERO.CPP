@@ -349,8 +349,16 @@ void CierraCajero()
 	if (ckaNro != 0)
 		pf->OpenDrwr();
 
+	// Inicio del recuento: va en todos los registros 14, junto con la hora en que se termino de
+	// contar, para saber cuanto demora el arqueo.
+	unsigned long fechaIniArq = date();
+	unsigned long horaIniArq = time_();
+
 	// Edita el arqueo
 	res = FullArqueo();
+	decl.fechaIni = fechaIniArq;
+	decl.horaIni = horaIniArq;
+	decl.horaFin = time_();
 
 	// Graba e imprime el resultado.
 	int cantTickVlto = 0;
@@ -515,6 +523,23 @@ void CierraCajero()
 		if(tBolsin > 0)
 			DispDetaArqueo("TOT  BOLSIN...:", HRng(tBolsin));
 		DispDetaArqueo("DIFERENCIA FINAL:", HRng(tImporte + montoTickVlto - tTeorico - tBolsin));
+
+		//   Duracion del recuento: de la pantalla de arqueo a "Grabar y Salir" (las mismas horas que
+		//   van en ZETA y POSI de los registros 14).
+		long segIni = (decl.horaIni / 10000) * 3600 + ((decl.horaIni / 100) % 100) * 60 + decl.horaIni % 100;
+		long segFin = (decl.horaFin / 10000) * 3600 + ((decl.horaFin / 100) % 100) * 60 + decl.horaFin % 100;
+		if(segFin < segIni) segFin += 24 * 3600;		// Cruzo la medianoche.
+		long durArq = segFin - segIni;
+		sprintf(tMsg, "%02ld:%02ld:%02ld", durArq / 3600, (durArq / 60) % 60, durArq % 60);
+		DispDeta("", "");
+		//   DispDeta y no DispDetaArqueo: este busca un monto al final del texto para la pantalla.
+		DispDeta("DURACION ARQUEO.:", tMsg);
+		if(z_muestra)
+		{
+			char durMsg[60];
+			sprintf(durMsg, "DURACION ARQUEO: %s", tMsg);
+			WriteTickTmp("", durMsg, 0, 0, 0, 0, false);
+		}
 
 		STRCPY(tMsg, ".");
 		pf->PrintVoucher(tMsg);

@@ -395,6 +395,9 @@ struct DDecla_ {
 	char nombregrupo[30];	//Agrupacion del medio de pago, toma lo que se imprime
 	int nro;				// Codigo del medio de pago (en arqueo resumido, el LINKECR del grupo). 0 en TOTALES.
 	int resumido;			// 1=Arqueo resumido (nro es el LINKECR del grupo), 0=detallado.
+	unsigned long fechaIni;	// Fecha en que empezo el arqueo (AAAAMMDD).
+	unsigned long horaIni;	// Hora en que empezo el arqueo (HHMMSS).
+	unsigned long horaFin;	// Hora en que termino de contar, con "Grabar y Salir" (HHMMSS).
 };
 #ifdef IN_DUMP
 dDbf_ xxDDecla = { DDecla, {
@@ -406,6 +409,9 @@ dDbf_ xxDDecla = { DDecla, {
 	{ SZ_CHAR*30, 'C', "nombre" },
 	{ SZ_INT,     'I', "nro" },
 	{ SZ_INT,     'I', "otrop" },
+	{ SZ_ULONG,   'L', "fecha_z" },	// Columnas libres para el arqueo: inicio y fin del recuento.
+	{ SZ_ULONG,   'L', "zeta" },
+	{ SZ_ULONG,   'L', "posi" },
 	{0}
 }}; 
 #endif
