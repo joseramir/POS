@@ -5,6 +5,17 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-29 - Clover: opciones del menu de anulaciones segun ecrclover
+
+- `CORRI.CPP` (`corriall_`): las opciones "Anula Tarjeta Clover", "Devolucion Clover", "Reimprime Recibo Clover" y
+  "Resumen del dia Clover" (que estaban comentadas) se muestran solo si `ecrclover` esta activo en `[layout]`.
+
+### Pendiente
+
+- Sin compilar ni probar.
+
+---
+
 ## 2026-10-29 - Arqueo de cajero: hora de inicio y fin en el trans
 
 Para saber cuanto demora cada arqueo. Los registros del arqueo (func 14, uno por medio y el 999 TOTALES) llevan

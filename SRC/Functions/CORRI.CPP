@@ -192,10 +192,12 @@ void corriall_(int dummy)
 		elanul->Add("Carga Seña de Pago");
 		elanul->Add("Anula Tarjeta PrismaECR");
 		elanul->Add("Cierre de Lotes PrismaECR");
-		/*elanul->Add("Anula Tarjeta Clover");
-		elanul->Add("Devolucion Clover");
-		elanul->Add("Reimprime Recibo Clover");
-		elanul->Add("Resumen del dia Clover");*/
+		if (EcrClover){
+			elanul->Add("Anula Tarjeta Clover");
+			elanul->Add("Devolucion Clover");
+			elanul->Add("Reimprime Recibo Clover");
+			elanul->Add("Resumen del dia Clover");
+		}
 
 		//elanul->Add("Hacer Ticket/Factura de Nota Credito");
 		//elanul->Add("Anula MercadoPago");
