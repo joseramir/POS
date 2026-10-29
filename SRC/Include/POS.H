@@ -749,6 +749,10 @@ public:
 	bool solofact;					// Indica si el impresor solo imprime Facturas.	
 	int TipoComprobante;
 	long NumeroComprobante;
+	long UltNroComprob[3];			// Ultimo nro por tipo: [0]=81 T/F A, [1]=82 T/F B, [2]=83 Ticket
+	void GuardaNroComprob(int tipo, long nro);	// Recuerda el nro del tipo (solo 81, 82 y 83)
+	long UltimoNroComprob(int tipo);			// Ultimo nro conocido del tipo (0 = no se sabe)
+	int TipoComprobanteActual();				// Tipo que va a salir segun GlobalTF / c_condiva
 
 	int frepdesde, frephasta, frepsig;
 
@@ -847,6 +851,7 @@ public:
 	virtual char *ChkDes(char *src, char *dst);	// Chequea la validez de descripciones.
 	virtual void Debug(void);					// Funciones de depuracion.
 	virtual int  GetTickNro(int);				// Devuelve el nro de ticket (0=Ticket B, 1=Ticket A)
+	virtual void LeeNrosComprob();				// Consulta al impresor el ultimo nro de 81, 82 y 83
 	virtual void CheckStatus();					// Valida el estado del impresor
 	virtual void Configure(char *confParam);	// Configura el impresor.
 	virtual char *PuntoDeVenta();				// Retorna el punto de venta actual

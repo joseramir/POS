@@ -367,8 +367,39 @@ int PrinterPR250::GetTickNro(int cual)
 	sgetdec(&pc);					// Codigo comprobante en curso
 	sgetdec(&pc);					// Codigo comprobante informado
 	NumeroComprobante = sgetdec(&pc);	//Numero de Comprobante
+	GuardaNroComprob(TipoComprobante, NumeroComprobante);
 		
 	return NumeroComprobante;
+}
+
+//   Consulta el ultimo numero de T/F A, T/F B y Ticket, para que la pantalla muestre el del tipo que
+//   se esta fichando desde el primer ticket (en los mayoristas el comprobante se abre recien al cerrar
+//   la venta). No toca TipoComprobante ni NumeroComprobante.
+void PrinterPR250::LeeNrosComprob()
+{
+	int tipo;
+	char *pc;
+
+	for(tipo = 81; tipo <= 83; tipo++)
+	{
+		ignoraError4 = 1;
+		sprintf(txbuff, "*%c%d", SEP, tipo);
+		EnviaRecibePaquete(txbuff);
+		ignoraError4 = 0;
+
+		pc = bufImpre;
+		sgethexa(&pc);					// Estado de la impresora
+		sgethexa(&pc);					// Estado Fiscal
+		sgetdec(&pc);					// Estado auxiliar
+		sgetdec(&pc);					// Estado Interno
+		sgetdec(&pc);					// Codigo comprobante en curso
+		sgetdec(&pc);					// Codigo comprobante informado
+		GuardaNroComprob(tipo, sgetdec(&pc));	// Numero de Comprobante
+	}
+	sprintf(txbuff, "Ultimos comprobantes: FA %ld - FB %ld - TI %ld",
+		UltimoNroComprob(81), UltimoNroComprob(82), UltimoNroComprob(83));
+	WriteBootLog(txbuff);
+	txbuff[0] = 0;
 }
 
 //   Abre la gaveta (Cajon de dinero). Utilizamos para esta tarea el dispositivo presente 
@@ -407,6 +438,7 @@ void PrinterPR250::CompleteInitialization()
 			limTicket = llimfiscal;
 	}
 	txbuff[0] = 0;
+	LeeNrosComprob();
 	
 	TipoComprobante = 83; //Setea el tipo de Comprobante por defecto a Tique
 }
@@ -754,6 +786,7 @@ int PrinterPR250::PrintEncab()
 			splitChar(&pc);
 			splitChar(&pc);
 			NumeroComprobante = sgetdec(&pc);
+			GuardaNroComprob(TipoComprobante, NumeroComprobante);
 			pc = NULL;
 		}
 		else
@@ -786,6 +819,7 @@ int PrinterPR250::PrintEncab()
 			splitChar(&pc);
 			splitChar(&pc);
 			NumeroComprobante = sgetdec(&pc);
+			GuardaNroComprob(TipoComprobante, NumeroComprobante);
 			pc = NULL;
 
 			if (chkFiscStat() == 0)	
@@ -805,6 +839,7 @@ int PrinterPR250::PrintEncab()
 		splitChar(&pc);
 		splitChar(&pc);
 		NumeroComprobante = sgetdec(&pc);
+		GuardaNroComprob(TipoComprobante, NumeroComprobante);
 		pc = NULL;
 
 		if (chkFiscStat() == 0)		

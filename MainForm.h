@@ -259,12 +259,22 @@ namespace pos {
 		System::String^ leyendaTicket(){
 			String^ tleyen = "";
 			if (inOper > 0){
-				if (pf->TipoComprobante == 83)
-					tleyen = "TI: " + System::Convert::ToString(globalDelayPrint ? pf->NumeroComprobante + 1 : pf->NumeroComprobante);
-				else if (pf->TipoComprobante == 82)
-					tleyen = "FB: " + System::Convert::ToString(globalDelayPrint ? pf->NumeroComprobante + 1 : pf->NumeroComprobante);
-				else if (pf->TipoComprobante == 81)
-					tleyen = "FA: " + System::Convert::ToString(globalDelayPrint ? pf->NumeroComprobante + 1 : pf->NumeroComprobante);
+				//   Con impresion diferida (mayoristas) el comprobante no esta abierto: el tipo sale del
+				//   cliente elegido, no de TipoComprobante (que PrintEncab() deja en 83).
+				int tipo = globalDelayPrint ? pf->TipoComprobanteActual() : pf->TipoComprobante;
+				//   El nro es el ultimo conocido de ese tipo: NumeroComprobante es uno solo y en los
+				//   mayoristas quedaba con el del comprobante anterior, que puede ser de otro tipo.
+				long nro = pf->UltimoNroComprob(tipo);
+				if (nro == 0)
+					nro = pf->NumeroComprobante;
+				if (globalDelayPrint)
+					nro++;
+				if (tipo == 83)
+					tleyen = "TI: " + System::Convert::ToString(nro);
+				else if (tipo == 82)
+					tleyen = "FB: " + System::Convert::ToString(nro);
+				else if (tipo == 81)
+					tleyen = "FA: " + System::Convert::ToString(nro);
 			}
 			return tleyen;
 		}

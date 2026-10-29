@@ -5,6 +5,33 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-10-29 - Pantalla: nro de T/F A/B que no correspondia al comprobante que se ficha
+
+El boton de la pantalla (`TI:` / `FB:` / `FA:`) mostraba `NumeroComprobante`, que es uno solo para los tres
+tipos. En los mayoristas (impresion diferida) el comprobante se abre recien al cerrar la venta, asi que
+durante el fichado quedaba el numero del ultimo comprobante emitido, aunque fuera de otro tipo (por ejemplo
+`FB:` con el numero del ultimo ticket comun + 1).
+
+- `POS.H` / `PRINTER.CPP`: `UltNroComprob[3]` con el ultimo numero de 81 (T/F A), 82 (T/F B) y 83 (Ticket),
+  `GuardaNroComprob()` y `UltimoNroComprob()`; `LeeNrosComprob()` virtual (vacia en la base).
+- `PPR250.cpp`: se guarda el numero en `GetTickNro()` y en las tres aperturas de `PrintEncab()`;
+  `LeeNrosComprob()` consulta los tres tipos al final de `CompleteInitialization()` y lo deja en el boot log
+  (`Ultimos comprobantes: FA ... - FB ... - TI ...`).
+- `MainForm.h` (`leyendaTicket`): muestra el ultimo numero del tipo en curso (+1 con impresion diferida); si el
+  driver no lo informa (0), usa `NumeroComprobante` como antes.
+- Tipo: con impresion diferida `PrintEncab()` deja `TipoComprobante` en 83 antes de salir (y entre tickets queda
+  el del anterior), asi que con el cliente elegido con la tecla de ticket-factura la pantalla decia `TI:`.
+  `PrinterFiscal_::TipoComprobanteActual()` lo calcula de `GlobalTF` / `c_condiva` con el criterio de
+  `PrintEncab()` (RI, NI y MO -> 81; el resto -> 82; sin cliente -> 83) y `leyendaTicket` lo usa en modo
+  diferido. `TipoComprobante` no se toca (lo usan `GetTickNro()`, el dump y el webapi).
+- No cambia `GetTickNro()` ni `NumeroComprobante`, que usan vouchers, Prisma, Clover, etc.
+
+### Pendiente
+
+- Sin compilar ni probar.
+
+---
+
 ## 2026-10-28 - Balanza: se sacan las trazas del log.pos
 
 Las trazas que se agregaron para el digito cambiado del peso (CO05 caja 9) ya cumplieron su funcion.

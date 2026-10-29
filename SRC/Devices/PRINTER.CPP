@@ -308,6 +308,7 @@ PrinterFiscal_::PrinterFiscal_()
 	STRCPY(mpagAdicDesc, "");
 	stackPagos = new ::ArrayList(true, "PrinterFiscal_Ctor");
 	solofact = false;
+	UltNroComprob[0] = UltNroComprob[1] = UltNroComprob[2] = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -978,6 +979,41 @@ int PrinterFiscal_::chk()
 int PrinterFiscal_::GetTickNro(int cual)
 {
 	return 9999;
+}
+
+//   Ultimo numero de cada tipo de comprobante (81 T/F A, 82 T/F B, 83 Ticket). El driver lo guarda
+//   cada vez que el impresor informa un numero. NumeroComprobante es uno solo para los tres tipos y
+//   en los mayoristas (impresion diferida) quedaba con el del ultimo comprobante emitido, que puede
+//   ser de otro tipo que el que se esta fichando.
+void PrinterFiscal_::GuardaNroComprob(int tipo, long nro)
+{
+	if(tipo >= 81 && tipo <= 83 && nro > 0)
+		UltNroComprob[tipo - 81] = nro;
+}
+
+long PrinterFiscal_::UltimoNroComprob(int tipo)
+{
+	if(tipo >= 81 && tipo <= 83)
+		return UltNroComprob[tipo - 81];
+	return 0;
+}
+
+//   Tipo del comprobante que va a salir, segun el cliente identificado (mismo criterio que
+//   PrintEncab() del PR250). Con impresion diferida (mayoristas) el comprobante se abre recien al
+//   cerrar la venta: TipoComprobante queda en 83 porque PrintEncab() lo pisa antes de salir, o con
+//   el del ticket anterior, aunque el cliente ya este elegido.
+int PrinterFiscal_::TipoComprobanteActual()
+{
+	if(!GlobalTF || c_condiva == NULL)
+		return EsNotaCredito ? 110 : 83;
+	if(!_stricmp(c_condiva, "RI") || !_stricmp(c_condiva, "NI") || !_stricmp(c_condiva, "MO"))
+		return EsNotaCredito ? 112 : 81;
+	return EsNotaCredito ? 113 : 82;
+}
+
+//   Por defecto no hay consulta por tipo: la sobreescriben los drivers que la soportan.
+void PrinterFiscal_::LeeNrosComprob()
+{
 }
 
 // Instala logo grafico.

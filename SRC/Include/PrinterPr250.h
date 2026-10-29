@@ -57,6 +57,7 @@ public:
 	int  SetPie(char *msg, int linea);
 	int  SetHeader(char *msg);
 	int  GetTickNro(int cual);
+	void LeeNrosComprob();
 	void Configure(char *confParam);
 	void CheckStatus();
 	void Owner(char *cuit, char *pv);
