@@ -5,6 +5,26 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-01 - PrismaECR: "NO REINICIE LA CAJA" y espera de 5 minutos
+
+Los cajeros reinician la caja si la pantalla sigue en "procesando" despues de unos 2 minutos. Eso corta la espera del
+cambio anterior, y al volver a cobrar se repite el camino de los cobros perdidos (ahi protege el 409 del PR #2 del
+Gateway, que es la pieza principal).
+
+- `TJOCommon/PrismaECR/MsgAlertPrismaECR.cs`:
+  - Cuando el pago no se pudo cancelar, la pantalla muestra "NO REINICIE LA CAJA" (en rojo) y "Esperando la
+    terminal, quedan N s"; se oculta el "ESC para cancelar", que en esa etapa no hace nada. El texto anterior no
+    entraba en el label.
+  - `SEG_MAX_SEGUIMIENTO_PAGO` baja de 600 a 300 s desde la solicitud. En 60 dias de produccion el 99 % de las
+    ventas se aprueba antes de 91 s, y en los 24 cobros perdidos Payway confirmo entre 65 y 287 s (uno a los 660 s,
+    que lo sigue cubriendo el Gateway con sus 10 minutos).
+
+### Pendiente
+
+- Sin compilar el POS ni probar en caja (la carpeta PrismaECR compila con csc).
+
+---
+
 ## 2026-11-01 - PrismaECR: un pago que no se puede cancelar se sigue hasta el resultado final
 
 Entre junio y octubre hubo 24 ventas cobradas por Payway sin venta en la caja ($1,6M, las devoluciones las gestiona

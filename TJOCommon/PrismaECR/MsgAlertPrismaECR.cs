@@ -26,9 +26,11 @@ namespace Alberdi.TJOCommon.PrismaECR
         PosPaymentRequest peticion;
 
         private const int MAX_INTENTOS = 60;//NUMERO MAXIMO DE INTENTOS ANTES DE DEJAR DE REINTENTAR
-        // Pago que no se pudo cancelar: se sigue hasta 10 minutos desde la solicitud, lo mismo
-        // que el Gateway PrismaECR sigue la operacion con Payway
-        private const int SEG_MAX_SEGUIMIENTO_PAGO = 600;
+        // Pago que no se pudo cancelar: se sigue hasta 5 minutos desde la solicitud. Los cajeros
+        // reinician la caja si la espera se alarga, y en produccion Payway confirmo estos casos
+        // entre 65 y 287 s (99 % de las ventas antes de 91 s). El Gateway sigue la operacion
+        // hasta 10 minutos: si se aprueba despues, queda APROBADA alla.
+        private const int SEG_MAX_SEGUIMIENTO_PAGO = 300;
         // Errores seguidos de la consulta de estado del pago antes de abandonar
         private const int MAX_ERRORES_CONSULTA_PAGO = 5;
 
@@ -92,6 +94,21 @@ namespace Alberdi.TJOCommon.PrismaECR
             {
                 label1.Text = tit1;
                 label2.Text = tit2;
+            }
+        }
+
+        private void MarcaSeguimiento()
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(MarcaSeguimiento));
+            }
+            else
+            {
+                tmrSePuedeCancelar.Enabled = false;
+                SePuedeCancelar = false;
+                lblCancelar.Visible = false;
+                label1.ForeColor = Color.Red;
             }
         }
 
@@ -188,7 +205,8 @@ namespace Alberdi.TJOCommon.PrismaECR
                             itera++;
                             if (enSeguimiento)
                             {
-                                ActualizaTitulos("No se pudo cancelar: el cliente ya opera la terminal", "Esperando el resultado, consulta = " + itera.ToString());
+                                int quedan = SEG_MAX_SEGUIMIENTO_PAGO - (int)(DateTime.Now - inicio).TotalSeconds;
+                                ActualizaTitulos("NO REINICIE LA CAJA", "Esperando la terminal, quedan " + Math.Max(quedan, 0).ToString() + " s");
                                 if ((DateTime.Now - inicio).TotalSeconds >= SEG_MAX_SEGUIMIENTO_PAGO)
                                 {
                                     this.ConError = true;
@@ -222,6 +240,9 @@ namespace Alberdi.TJOCommon.PrismaECR
                                     Realizar.EscribeLog("No se pudo cancelar el pago " + idOperacion + " (" + (porTiempo ? "tiempo excedido" : "ESC") + "), se sigue consultando: " + Realizar.MensajeError, "CAJA");
                                     enSeguimiento = true;
                                     itera = 0;
+                                    // En seguimiento ESC no hace nada: se saca el "ESC para cancelar"
+                                    // y el aviso de no reiniciar va en rojo
+                                    MarcaSeguimiento();
                                 }
                             }
                             rtaCons = null;
