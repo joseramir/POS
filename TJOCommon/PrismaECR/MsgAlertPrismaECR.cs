@@ -26,6 +26,15 @@ namespace Alberdi.TJOCommon.PrismaECR
         PosPaymentRequest peticion;
 
         private const int MAX_INTENTOS = 60;//NUMERO MAXIMO DE INTENTOS ANTES DE DEJAR DE REINTENTAR
+        // Pago que no se pudo cancelar: se sigue hasta 10 minutos desde la solicitud, lo mismo
+        // que el Gateway PrismaECR sigue la operacion con Payway
+        private const int SEG_MAX_SEGUIMIENTO_PAGO = 600;
+        // Errores seguidos de la consulta de estado del pago antes de abandonar
+        private const int MAX_ERRORES_CONSULTA_PAGO = 5;
+
+        // ESC durante un pago: lo atiende el hilo de consulta (cancela y, si no se puede, sigue consultando)
+        volatile bool pedidoCancelarPago = false;
+        AutoResetEvent despertarPago = new AutoResetEvent(false);
 
         public PosPaymentResponse RespuestaVenta = null;
         public PosAnulacionResponse RespuestaAnulacion = null;
@@ -105,6 +114,8 @@ namespace Alberdi.TJOCommon.PrismaECR
 
             RespuestaVenta = null;
             salirProcesando = false;
+            pedidoCancelarPago = false;
+            despertarPago.Reset();
             Thread hilo = new System.Threading.Thread(() =>
             {
                 try
@@ -115,24 +126,45 @@ namespace Alberdi.TJOCommon.PrismaECR
                     {
                         enPago = true;
                         int itera = 0;
+                        int erroresSeguidos = 0;
+                        // En seguimiento: no se pudo cancelar (el cliente ya opera la terminal) y se
+                        // espera el resultado final. Hasta el 01/11/2026 la caja abandonaba aca y el
+                        // cajero reintentaba: el pago anterior se aprobaba igual y quedaba sin venta.
+                        bool enSeguimiento = false;
+                        string idOperacion = RespuestaVenta.IdOperacionPayway;
+                        DateTime inicio = DateTime.Now;
                         TerminoHilo = false;
                         salirProcesando = false;
                         while (true && !salirProcesando)
                         {
-                            PosPaymentResponse rtaCons = Realizar.ConsultarStatusPago(RespuestaVenta.IdOperacionPayway);
+                            PosPaymentResponse rtaCons = Realizar.ConsultarStatusPago(idOperacion);
                             if (Realizar.ConError)
                             {
-                                this.ConError = true;
-                                MensajeError = Realizar.MensajeError;
-                                salirProcesando = TerminoHilo = true;
-                                break;
+                                // Un corte de red no deja la caja libre para cobrar de nuevo mientras
+                                // el pago puede seguir en curso: se toleran varios errores seguidos
+                                erroresSeguidos++;
+                                Realizar.EscribeLog("ConsultarStatusPago con error (" + erroresSeguidos.ToString() + " seguidos): " + Realizar.MensajeError, "CAJA");
+                                if (erroresSeguidos >= MAX_ERRORES_CONSULTA_PAGO)
+                                {
+                                    this.ConError = true;
+                                    MensajeError = Realizar.MensajeError + "\nNo se pudo confirmar el resultado del pago. Verificar en la terminal antes de volver a cobrar.";
+                                    salirProcesando = TerminoHilo = true;
+                                    break;
+                                }
                             }
+                            else
+                                erroresSeguidos = 0;
                             if (rtaCons != null)
                             {
 
                                 this.RespuestaVenta = rtaCons;
                                 if (rtaCons.Estado == "APROBADA")
                                 {
+                                    // Tambien si se habia pedido cancelar: el cliente fue cobrado, la venta se registra
+                                    if (enSeguimiento)
+                                        Realizar.EscribeLog("Pago " + idOperacion + " APROBADO despues de un pedido de cancelacion que no se pudo hacer", "CAJA");
+                                    this.ConError = false;
+                                    this.MensajeError = "";
                                     ActualizaTitulos("Operacion APROBADA", "");
                                     TerminoHilo = salirProcesando = true;
                                     break;
@@ -153,22 +185,47 @@ namespace Alberdi.TJOCommon.PrismaECR
                                     break;
                                 }
                             }
-                            if (TerminoHilo)
-                                salirProcesando = true;
                             itera++;
-                            ActualizaTitulos("Operacion NO Apobada Todavia", "Consultando Operacion, numero consulta = " + itera.ToString());
-                            rtaCons = null;
-                            //Con 60 iteraciones son aprox 2 minutos que no recibe respuesta y se cancela por timeout
-                            if (itera == MAX_INTENTOS)
+                            if (enSeguimiento)
                             {
-                                this.ConError = true;
-                                this.MensajeError = "Tiempo excedido para procesar la operacion.";
-                                ActualizaTitulos("Tiempo excedido..", "CANCELANDO intencion Pago");
-                                Realizar.CancelarIntencionPago(RespuestaVenta.IdOperacionPayway);
-                                TerminoHilo = salirProcesando = true;
-                                break;
+                                ActualizaTitulos("No se pudo cancelar: el cliente ya opera la terminal", "Esperando el resultado, consulta = " + itera.ToString());
+                                if ((DateTime.Now - inicio).TotalSeconds >= SEG_MAX_SEGUIMIENTO_PAGO)
+                                {
+                                    this.ConError = true;
+                                    this.MensajeError = "No se pudo confirmar el resultado del pago (" + idOperacion + ").\nVerificar en la terminal antes de volver a cobrar.";
+                                    Realizar.EscribeLog("Pago " + idOperacion + " sin estado final despues de " + SEG_MAX_SEGUIMIENTO_PAGO.ToString() + " s", "CAJA");
+                                    ActualizaTitulos("RESULTADO DESCONOCIDO", "Verificar antes de volver a cobrar");
+                                    TerminoHilo = salirProcesando = true;
+                                    break;
+                                }
                             }
-                            Thread.Sleep(2000);
+                            else
+                            {
+                                ActualizaTitulos("Operacion NO Apobada Todavia", "Consultando Operacion, numero consulta = " + itera.ToString());
+                                // Con 60 iteraciones son aprox 2 minutos (o ESC del cajero): se intenta cancelar
+                                bool porTiempo = (itera >= MAX_INTENTOS);
+                                if (porTiempo || pedidoCancelarPago)
+                                {
+                                    ActualizaTitulos(porTiempo ? "Tiempo excedido.." : "CANCELANDO ORDEN", "CANCELANDO intencion Pago " + idOperacion);
+                                    Realizar.CancelarIntencionPago(idOperacion);
+                                    if (!Realizar.ConError)
+                                    {
+                                        // Cancelada: el cliente no llego a operar la terminal
+                                        this.ConError = porTiempo;
+                                        this.MensajeError = porTiempo ? "Tiempo excedido para procesar la operacion." : "";
+                                        ActualizaTitulos("Finalizando Cancelar Orden", "");
+                                        TerminoHilo = salirProcesando = true;
+                                        break;
+                                    }
+                                    // No se pudo cancelar (409 del Gateway, o error): el pago puede
+                                    // aprobarse igual, se sigue consultando hasta el estado final
+                                    Realizar.EscribeLog("No se pudo cancelar el pago " + idOperacion + " (" + (porTiempo ? "tiempo excedido" : "ESC") + "), se sigue consultando: " + Realizar.MensajeError, "CAJA");
+                                    enSeguimiento = true;
+                                    itera = 0;
+                                }
+                            }
+                            rtaCons = null;
+                            despertarPago.WaitOne(2000, false);
                         }
                     }
                     else
@@ -406,6 +463,20 @@ namespace Alberdi.TJOCommon.PrismaECR
                 this.ConError = false;
                 SePuedeCancelar = false; // Evita doble disparo si el usuario presiona Escape dos veces
 
+                if (enPago)
+                {
+                    // El hilo de consulta hace la cancelacion: si Payway no la acepta (el cliente ya
+                    // opera la terminal) sigue esperando el resultado en vez de dejar la caja libre
+                    // para cobrar de nuevo.
+                    if (this.RespuestaVenta != null && RespuestaVenta.Estado == "PENDIENTE")
+                    {
+                        ActualizaTitulos("CANCELANDO ORDEN", "CREADA " + RespuestaVenta.IdOperacionPayway);
+                        pedidoCancelarPago = true;
+                        despertarPago.Set();
+                    }
+                    return;
+                }
+
                 // FIX: La cancelacion se mueve a un hilo de fondo para no bloquear el UI thread.
                 // Llamar a CancelarIntencionPago/Anulacion directamente en el UI thread congela
                 // el formulario durante la llamada de red.
@@ -413,31 +484,7 @@ namespace Alberdi.TJOCommon.PrismaECR
                 {
                     try
                     {
-                        if (enPago)
-                        {
-                            if (this.RespuestaVenta != null && RespuestaVenta.Estado == "PENDIENTE")
-                            {
-                                // Senalamos al loop principal que debe detenerse
-                                salirProcesando = TerminoHilo = true;
-                                ActualizaTitulos("CANCELANDO ORDEN", "CREADA " + RespuestaVenta.IdOperacionPayway);
-                                PosPaymentResponse rtaCons = Realizar.CancelarIntencionPago(this.RespuestaVenta.IdOperacionPayway);
-                                if (Realizar.ConError)
-                                {
-                                    this.ConError = true;
-                                    this.MensajeError = Realizar.MensajeError;
-                                    // FIX: NO resetear salirProcesando/TerminoHilo a false aqui.
-                                    // Hacerlo reactivaba el loop del hilo principal, causando comportamiento
-                                    // impredecible. El hilo ya fue senalado a detenerse; dejarlo terminar.
-                                    ActualizaTitulos("No se pudo cancelar la Intencion", "");
-                                }
-                                else
-                                {
-                                    ActualizaTitulos("Finalizando Cancelar Orden", "");
-                                    enPago = false;
-                                }
-                            }
-                        }
-                        else if (enAnulacion)
+                        if (enAnulacion)
                         {
                             if (this.RespuestaAnulacion != null && RespuestaAnulacion.Estado == "ANULACION_PENDIENTE")
                             {

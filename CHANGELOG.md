@@ -5,6 +5,36 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-01 - PrismaECR: un pago que no se puede cancelar se sigue hasta el resultado final
+
+Entre junio y octubre hubo 24 ventas cobradas por Payway sin venta en la caja ($1,6M, las devoluciones las gestiona
+Tesoreria). A los ~150 s la caja daba "Tiempo excedido", pedia cancelar sin mirar la respuesta y quedaba libre para
+cobrar de nuevo. Pero el cliente ya estaba operando el Newland, Payway no aceptaba la cancelacion y el pago anterior
+se aprobaba sin que nadie lo registrara. Con ESC pasaba lo mismo si la cancelacion fallaba.
+
+- `TJOCommon/PrismaECR/MsgAlertPrismaECR.cs` (`ShowMsgProcesaVenta`):
+  - La cancelacion (por tiempo, a las 60 consultas, o por ESC) la hace ahora el hilo que consulta el estado. Si se
+    cancela, termina como antes. Si no se puede cancelar (409 del Gateway o cualquier error), sigue consultando
+    hasta un estado final, como maximo 10 minutos desde la solicitud (`SEG_MAX_SEGUIMIENTO_PAGO`). Si se aprueba,
+    la venta se registra en el ticket como cualquier cobro. Si vence sin resultado: "Verificar en la terminal antes
+    de volver a cobrar".
+  - Un error en la consulta de estado ya no corta en la primera falla: se abandona tras 5 errores seguidos
+    (`MAX_ERRORES_CONSULTA_PAGO`).
+  - El ESC ya no llama a la cancelacion desde otro hilo: avisa al hilo de consulta (`pedidoCancelarPago`).
+- Anulaciones y cierres de lote sin cambios.
+- Complementa el PR #2 del Gateway PrismaECR (409 cuando el pago anterior no se puede cancelar, y seguimiento del
+  pago hasta 10 minutos). Sin ese PR (Gateway master 37f0d57) la venta igual se registra si Payway la resuelve antes
+  de los 5 minutos desde la solicitud; despues el Gateway la marca ERROR y la caja muestra "resultado desconocido".
+  En los 24 casos Payway confirmo entre 65 y 287 s, salvo uno a los 660 s. Con el PR la ventana pasa a 10 minutos y
+  el GET devuelve PENDIENTE hasta el estado final.
+
+### Pendiente
+
+- Sin compilar el POS ni probar en caja (la carpeta PrismaECR compila con csc).
+- Si el cajero apreto ESC para corregir cuotas y el pago se aprueba igual, queda registrado con los datos
+  originales: hay que anularlo y volver a cobrar.
+---
+
 ## 2026-10-29 - Clover: opciones del menu de anulaciones segun ecrclover
 
 - `CORRI.CPP` (`corriall_`): las opciones "Anula Tarjeta Clover", "Devolucion Clover", "Reimprime Recibo Clover" y
