@@ -513,6 +513,7 @@ void CommonDescto(int codigo, double monto, double cant, bool simular)
 				delete mpmsg;
 
 				struct DDplu_ plu;
+				memset(&plu, 0, sizeof(plu));	// Todo en cero: precpuntual/dun14/etc. quedaban con basura del stack (desborde en Trans SQL y promos apagadas)
 				plu.anulado = 0;
 				plu.cod = codigo;
 				plu.envas = 0;
@@ -596,6 +597,7 @@ ValuePtr F_SeleccionarColegio(ValuePtr args[])
 		if(dbplu.Seek(ucod))
 		{						
 			struct DDplu_ plu;
+			memset(&plu, 0, sizeof(plu));	// Todo en cero: precpuntual/dun14/etc. quedaban con basura del stack (desborde en Trans SQL y promos apagadas)
 			plu.anulado = 0;
 			plu.cod = codcolsel;
 			plu.envas = 0;

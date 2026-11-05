@@ -5,6 +5,30 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-05 - Lineas de descuento de promos con basura en precpuntual: "ERROR - en funcion mpago"
+
+CO15 caja 15, 05/11 11:41, FB 10033 ($699.800, MercadoPago QR, cliente repa 17): despues de cerrar el fiscal la caja
+se reinicia con "ERROR - en funcion mpago, de tipo c++" y no salen el voucher de MercadoPago ni los de las promociones
+(Unilever). En `errormain.txt`: "Error de desbordamiento aritmetico al convertir numeric al tipo de datos numeric" en
+`TransSql.WriteSqlTrans.InsertPlu` <- `WriteEOPFiscal` <- `ProcMpag`. Son 60 casos en esa caja, todos desde el
+14/09/2026 (antes de esa fecha no hay ninguno en `InsertPlu`).
+
+Causa: las lineas de descuento que arman las promociones (`struct DDplu_ plu;` local, en el stack) no inicializan
+`precpuntual` (ni `dun14` y otros). Hasta `c2485d6` (precio puntualizado, 09-01) `@ticket` iba en cero fijo; desde
+ese commit va `item.PrecPuntual` y la basura del stack llega a la columna `ticket` de Trans en SQL y la desborda. En el
+`trans.dbf` del caso la linea del PLU 28392 (descuento de $63.000) tiene `TICKET=39576576`. La excepcion corta
+`ProcMpag` despues del fiscal y antes de los vouchers. Ademas, con basura positiva `ProcPlu` pone
+`ticketPrecPuntual = true` y apaga las promociones del resto del ticket (y la cobradora lee el mismo valor de vuelta).
+
+- `SRC/Functions/Plugin.cpp` (las dos lineas de descuento), `SRC/Functions/PluginFuncs.cpp` y
+  `SRC/Functions/PROMOS.cpp`: `memset(&plu, 0, sizeof(plu))` al declarar la `DDplu_`.
+
+### Pendiente
+
+- Sin compilar ni probar en caja. Confirmar el tipo de la columna `ticket` de Trans en la base de la cobradora.
+
+---
+
 ## 2026-11-01 - PrismaECR: "NO REINICIE LA CAJA" y espera de 5 minutos
 
 Los cajeros reinician la caja si la pantalla sigue en "procesando" despues de unos 2 minutos. Eso corta la espera del

@@ -202,6 +202,7 @@ void CommonDescto(int codigo, double monto, double cant, bool simular)
 		else
 		{
 			struct DDplu_ plu;
+			memset(&plu, 0, sizeof(plu));	// Todo en cero: precpuntual/dun14/etc. quedaban con basura del stack (desborde en Trans SQL y promos apagadas)
 			plu.anulado = 0;
 			plu.cod = codigo;
 			plu.envas = 0;

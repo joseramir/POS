@@ -589,6 +589,7 @@ void AplicaPromoJanis(){
 				if(dbplu.Seek(ucod))
 				{						
 					struct DDplu_ plu;
+					memset(&plu, 0, sizeof(plu));	// Todo en cero: precpuntual/dun14/etc. quedaban con basura del stack (desborde en Trans SQL y promos apagadas)
 					plu.anulado = 0;
 					plu.cod = item->Cod;
 					plu.envas = 0;
