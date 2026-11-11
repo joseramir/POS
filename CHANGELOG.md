@@ -5,6 +5,32 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-11 - Newland (serie): linemode '1' en vez de 0x01 (NAK con LRC 0x03)
+
+Causa del NAK del Newland con tarjeta EL (1 de cada 16 ventas, caja 7, ver 2026-09-16): el campo
+`linemode` (online) se mandaba como el byte 0x01, tal como dice el manual de protocolo v1.1 (`\x01`).
+La app oficial de Prisma y su DLL (`VpiPc_32.dll` 3.1.0.3, `char linemode; Online(1)`) mandan el
+caracter `'1'` (0x31). Comparando byte a byte el `vpiPC.log` de la caja contra el de la app oficial
+(`vpiPCAPP.log`), era la UNICA diferencia del paquete VEN. Con 0x01 algunos paquetes cerraban con LRC
+0x03 (= ETX) y la terminal no daba ACK; con `'1'` el LRC se corre en 0x30 y no puede dar 0x03
+variando montos o factura (solo digitos).
+
+### Cambio
+
+- `TJOCommon/Prisma/ProtocoloTrxPrisma.cs`: `LineModeChar()`; VEN, VEC y DEV mandan `'1'` para online.
+  Lo mismo en el modo DLL (`ViaDllPrisma.LineModeDll()`).
+
+### Probado el 11/11 (terminal de prueba, EL $1.500,05 factura 9999, comercio 37124153)
+
+- Con 0x01: paquete `01 03 03`, sin ACK (2/2 por DLL, como el 16/10 por serie y DLL), 909.
+- DLL con `'1'` (16:46): `31 03 33`, ACK, aprobada B14697 cupon 129.
+- **Serie con `'1'` (16:58): `31 03 33`, ACK, aprobada B15892 cupon 130 lote 2**, registrada en
+  `dbVerifone.db` y en el pago.
+- Falta: una venta con otra tarjeta (VI), venta con extracash y devolucion; confirmar con Prisma el valor
+  (sus dos manuales se contradicen).
+
+---
+
 ## 2026-11-05 - Lineas de descuento de promos con basura en precpuntual: "ERROR - en funcion mpago"
 
 CO15 caja 15, 05/11 11:41, FB 10033 ($699.800, MercadoPago QR, cliente repa 17): despues de cerrar el fiscal la caja

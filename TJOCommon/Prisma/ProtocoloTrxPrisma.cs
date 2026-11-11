@@ -39,6 +39,15 @@ namespace Alberdi.TJOCommon.Prisma
 
         private CodigoComando UltimoComando;
 
+        //   Online = el CARACTER '1' (0x31), como la app oficial de Prisma y su DLL. Hasta el 11/11 iba el
+        //   byte 0x01 (manual de protocolo v1.1: "\x01 si la trx es online"): con 0x01 algunos paquetes
+        //   cerraban con LRC 0x03 y la terminal no daba ACK (el NAK de EL, 1 de cada 16). Con '1' el LRC se
+        //   corre en 0x30 y no puede dar 0x03. Probado por DLL el 11/11 (EL $1.500,05 aprobada).
+        private static char LineModeChar(int lineMode)
+        {
+            return lineMode == 1 ? '1' : Convert.ToChar(lineMode);
+        }
+
         public string GetTest()
         {
             comando = "";
@@ -67,7 +76,7 @@ namespace Alberdi.TJOCommon.Prisma
             sb.Append(string.Format("{0}", trx.CodigoComercio.PadRight(15, ' ')));
             sb.Append(string.Format("{0}", trx.NombreComercio.PadRight(23, ' ')));
             sb.Append(string.Format("{0}", trx.CuitComercio.PadRight(23, ' ')));
-            sb.Append(string.Format("{0}", Convert.ToChar(trx.LineMode)));
+            sb.Append(LineModeChar(trx.LineMode));
             sb.Append(ETX);
             chkXor = CalcularXor(sb.ToString());
             comando = string.Format("{0}{1}{2}", STX, sb.ToString(), Convert.ToChar(chkXor));
@@ -90,7 +99,7 @@ namespace Alberdi.TJOCommon.Prisma
             sb.Append(string.Format("{0}", trx.CodigoComercio.PadRight(15, ' ')));
             sb.Append(string.Format("{0}", trx.NombreComercio.PadRight(23, ' ')));
             sb.Append(string.Format("{0}", trx.CuitComercio.PadRight(23, ' ')));
-            sb.Append(string.Format("{0}", Convert.ToChar(trx.LineMode)));
+            sb.Append(LineModeChar(trx.LineMode));
             sb.Append(ETX);
             chkXor = CalcularXor(sb.ToString());
             comando = string.Format("{0}{1}{2}", STX, sb.ToString(), Convert.ToChar(chkXor));
@@ -128,7 +137,7 @@ namespace Alberdi.TJOCommon.Prisma
             sb.Append(string.Format("{0}", trx.CodigoComercio.PadRight(15, ' ')));
             sb.Append(string.Format("{0}", trx.NombreComercio.PadRight(23, ' ')));
             sb.Append(string.Format("{0}", trx.CuitComercio.PadRight(23, ' ')));
-            sb.Append(string.Format("{0}", Convert.ToChar(trx.LineMode)));
+            sb.Append(LineModeChar(trx.LineMode));
             sb.Append(ETX);
             chkXor = CalcularXor(sb.ToString());
             comando = string.Format("{0}{1}{2}", STX, sb.ToString(), Convert.ToChar(chkXor));
