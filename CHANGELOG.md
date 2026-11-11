@@ -529,6 +529,61 @@ en produccion.
 
 ---
 
+## 2026-10-10 - Newland: operacion opcional por la DLL oficial de Prisma (VpiPc_32.dll)
+
+Prisma pidio probar su DLL de integracion (`VpiPc_32.dll`, "Pos Integrado Interprete", manual v1.17 en
+`Docs/`) en lugar del protocolo serie propio, para ver si el NAK con LRC 0x03 tambien aparece con la
+integracion oficial. La DLL **no** se da por solucion del LRC 0x03: es para comparar.
+
+### Cambio
+
+- Llave nueva en el `app.config` de la caja: `<add key="ModoNewland" value="dll"/>`. Sin la llave, o con
+  cualquier otro valor, todo sigue por el puerto serie exactamente como antes. La vuelta atras es sacar la
+  llave, sin recompilar.
+- `TJOCommon/Prisma/Vpipc.cs`: wrapper P/Invoke de la DLL (estructuras verificadas contra el manual).
+- `TJOCommon/Prisma/ViaDllPrisma.cs` (nuevo): hace cada operacion por la DLL y devuelve las mismas
+  respuestas que arma `ProtocoloTrxPrisma` (`RtaVenta`, `RtaQrModo`, `RtaCierre`, ...).
+  - VEN/VEC -> `vpiPurchase`/`vpiPurchaseExtraCash`, QRZ -> `vpiGetQRZ`, ANV -> `vpiVoid`,
+    DEV -> `vpiRefund`, CIE -> `vpiBatchClose`, TAR/PLA -> `vpiGetIssuer`/`vpiGetPlan`,
+    ULT -> `vpiGetLastTrxData`, ULC -> `vpiGetBatchCloseData`, IMT/IMC -> `vpiPrintTicket`/
+    `vpiPrintBatchClose`, TES -> `vpiTestConnection` (devuelve 0 = OK si la terminal contesto -> "002", lo que
+    esperan los formularios; el manual dice que devuelve 1/2 segun el equipo, pero la DLL 3.1.0.1 no lo hace).
+  - Abre y cierra el puerto en cada operacion; una operacion a la vez en todo el proceso (la DLL tiene
+    estado global). Si el open falla, cierra y reintenta una vez.
+  - Timeout de 90 s para venta, QR, anulacion y devolucion; 120 s para el cierre de lote.
+  - Aprobada **solo** con codigo de host `00`, como por serie (11, 85 y la parcial 10 quedan como
+    rechazo; decision del 30/09).
+  - **linemode = caracter `'1'` (0x31)** (11/11) en venta y devolucion, como la app oficial de Prisma
+    (`vpiPCAPP.log`) y el manual de la DLL (`char linemode; Online(1)`). Se mandaba el byte 0x01 del
+    protocolo serie (el manual de protocolo v1.1 dice `\x01`): era la UNICA diferencia con el paquete de la
+    app. Con 0x01 la venta EL $1.500,05 factura 9999 cerraba con LRC 0x03 y la terminal no daba ACK
+    (2 de 2 con la DLL 3.1.0.3); con '1' el LRC se corre en 0x30 (0x33) y no puede dar 0x03 variando
+    montos o factura. Prueba 11/11 16:46: EL $1.500,05 con ACK y aprobada (host 00, B14697, cupon 129,
+    lote 2). Por serie sigue yendo 0x01.
+  - **Sin consulta automatica de la ultima transaccion** (11/11): como por serie, la venta, la anulacion
+    y la devolucion van directo a la DLL; si no vuelven con OK queda el error. Entre el 10/10 y el 11/11
+    se leia `vpiGetLastTrxData` antes de operar y despues de un error para recuperar una operacion
+    aprobada sin respuesta; se saco para que el `vpiPC.log` que se manda a Prisma tenga solo la
+    operacion (y sumaba ~4 s por venta). `vpiGetLastTrxData` queda solo para el boton de consulta
+    manual de la ultima transaccion.
+  - Anulacion y devolucion esperan **180 s** (la venta y el QR siguen en 90): en la prueba del 13/10 la
+    terminal pidio la tarjeta y la DLL corto a los 90 s antes de que contestara.
+- `OperarTrxPrisma`: los metodos publicos no cambian; cada `Comunicar(comando)` pasa por `Operar()`, que va
+  por serie o por la DLL. Cero cambios en el C++.
+- `MsgAlertPrisma`: por la DLL la llamada bloquea y no se puede cortar desde la caja, asi que Escape queda
+  deshabilitado y el cartel dice "Para cancelar, usar la terminal". Cortar la espera sin cortar la
+  operacion dejaria a la terminal aprobando algo que la caja dio por cancelado.
+- Log: `LogPrisma.txt` (entrada y salida de cada llamada) + `vpiPC.log` de la DLL (`debug_to_file=1`).
+
+### Para probar en la terminal de prueba
+
+- `VpiPc_32.dll` y `VpiPc.ini` en el directorio de la caja (el ini de `bin/` tiene datos de demo
+  "PEPE COMERCIO": revisar antes). La DLL es del 27/05/2025, anterior al manual v1.17.
+- A validar: formato de los montos (centavos sin relleno), `linemode` (se manda el byte 0x01, igual que
+  por serie), codigo de comercio, fecha de la devolucion y campos del QR.
+
+---
+
 ## 2026-10-07 - Vendedor mayorista: el comprobante lo perdia al reprocesar el trans
 
 Revisando el caso de cobradora del mismo dia: el registro del vendedor mayorista (func 40, `DVendMay`) llega

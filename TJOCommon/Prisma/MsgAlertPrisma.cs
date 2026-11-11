@@ -184,6 +184,14 @@ namespace Alberdi.TJOCommon.Prisma
         private void tmrSePuedeCancelar_Tick(object sender, EventArgs e)
         {
             tmrSePuedeCancelar.Enabled = false;
+            //   Por la DLL la operacion no se puede cortar desde la caja (ver
+            //   OperarTrxPrisma.PermiteCancelar): Escape queda deshabilitado.
+            if (hacer != null && !hacer.PermiteCancelar)
+            {
+                lblCancelar.Text = "Para cancelar, usar la terminal";
+                lblCancelar.Visible = true;
+                return;
+            }
             SePuedeCancelar = true;
             lblCancelar.Visible = true;
         }

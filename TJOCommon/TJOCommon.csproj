@@ -122,6 +122,8 @@
     <Compile Include="Prisma\ProtocoloTrxPrisma.cs" />
     <Compile Include="Prisma\RtaTrxPrisma.cs" />
     <Compile Include="Prisma\TrxPrisma.cs" />
+    <Compile Include="Prisma\ViaDllPrisma.cs" />
+    <Compile Include="Prisma\Vpipc.cs" />
     <Compile Include="TJOClient.cs" />
     <Compile Include="VerifoneCommon\ShowCuota.cs" />
     <Compile Include="VerifoneCommon\ShowTarjeta.cs" />

@@ -46,8 +46,23 @@ namespace Alberdi.TJOCommon.Prisma
 
         public bool Cancelado = false;
 
+        //   Con ModoNewland = "dll" en el app.config las operaciones van por la DLL de Prisma
+        //   (ViaDllPrisma) y no por el puerto serie. null = serie, como siempre.
+        private ViaDllPrisma viaDll = null;
+
+        //   Por la DLL la llamada bloquea hasta que la terminal contesta y no hay forma de cortarla
+        //   desde la caja: si se dejara cancelar, la terminal podria aprobar despues de que la caja
+        //   dio la operacion por cancelada. Se cancela desde la terminal.
+        public bool PermiteCancelar
+        {
+            get { return viaDll == null; }
+        }
+
         public OperarTrxPrisma(int portNewland)
         {
+            if (ViaDllPrisma.Habilitada())
+                viaDll = new ViaDllPrisma(portNewland, EscribeLog);
+
             sp = new SerialPort();
             //sp.PortName = ConfigurationManager.AppSettings["COMPrisma"];
             sp.PortName = "COM" + (portNewland + 1).ToString();
@@ -323,6 +338,21 @@ namespace Alberdi.TJOCommon.Prisma
             }
         }
 
+        //   Ejecuta el comando por serie o, con la DLL habilitada, la operacion equivalente de
+        //   ViaDllPrisma. En los dos casos deja rtaBase, ConError y MensajeError como Comunicar().
+        private void Operar(string comando, Func<ViaDllPrisma, RespuestaBase> porDll)
+        {
+            if (viaDll == null)
+            {
+                Comunicar(comando);
+                return;
+            }
+            Cancelado = false;
+            rtaBase = porDll(viaDll);
+            ConError = viaDll.ConError;
+            MensajeError = viaDll.MensajeError;
+        }
+
         //Comunicar puede terminar sin error y sin respuesta (p. ej. el Newland contesto algo que no es ACK).
         //Para los comandos que esperan respuesta eso es un error.
         private void ControlarRespuesta()
@@ -339,7 +369,7 @@ namespace Alberdi.TJOCommon.Prisma
         {
             string comando = mtx.GetTest();
             EscribeLog("Hace comando Test");
-            Comunicar(comando);
+            Operar(comando, d => d.Test());
             ControlarRespuesta();
             if (!ConError)
             {
@@ -357,7 +387,7 @@ namespace Alberdi.TJOCommon.Prisma
             {
                 EscribeLog("Hace comando Venta");
                 EsUnaVenta = true;
-                Comunicar(comando);
+                Operar(comando, d => d.Venta(trx));
                 ControlarRespuesta();
                 //hasta aqui no hay error en la comunicacion
                 if (!ConError)
@@ -393,7 +423,7 @@ namespace Alberdi.TJOCommon.Prisma
             {
                 EscribeLog("Hace comando Venta con Extracash");
                 EsUnaVenta = true;
-                Comunicar(comando);
+                Operar(comando, d => d.Venta(trx));
                 ControlarRespuesta();
                 //hasta aqui no hay error en la comunicacion
                 if (!ConError)
@@ -426,7 +456,7 @@ namespace Alberdi.TJOCommon.Prisma
             {
                 EscribeLog("Hace comando Venta con QR");
                 EsUnaVenta = true;
-                Comunicar(comando);
+                Operar(comando, d => d.Qr(trx));
                 ControlarRespuesta();
                 //hasta aqui no hay error en la comunicacion
                 if (!ConError)
@@ -459,17 +489,22 @@ namespace Alberdi.TJOCommon.Prisma
                 if (trxOrig.Estado == 0)
                 {
                     string comando = "";
+                    TrxPrisma trxDll = trxOrig;
+                    RtaVenta rtaDll = rtaOrig;
+                    Func<ViaDllPrisma, RespuestaBase> porDll;
                     if (rtaOrig.Cerrado)//se hace devolucion
                     {
                         EscribeLog("Hace comando Devolucion");
                         comando = mtx.GetMensajeDevolucion(trxOrig, rtaOrig);
+                        porDll = d => d.Devolucion(trxDll, rtaDll);
                     }
                     else
                     {
                         EscribeLog("Hace comando Anulacion");
                         comando = mtx.GetMensajeAnulacion(rtaOrig.NumeroCupon, trxOrig.CodigoTarjeta);
+                        porDll = d => d.Anulacion(trxDll, rtaDll);
                     }
-                    Comunicar(comando);
+                    Operar(comando, porDll);
                     ControlarRespuesta();
                     if (!ConError)
                     {
@@ -507,7 +542,7 @@ namespace Alberdi.TJOCommon.Prisma
         {
             string comando = mtx.GetCierre();
             EscribeLog("Hace comando Cierre de lote");
-            Comunicar(comando);
+            Operar(comando, d => d.Cierre());
             ControlarRespuesta();
             //hasta aqui no hay error en la comunicacion
             if (!ConError)
@@ -525,6 +560,16 @@ namespace Alberdi.TJOCommon.Prisma
             AccesoDb.LimpiarTarjetas();
             EscribeLog("Hace comando Obtiene Tarjetas");
             ConError = false;
+            if (viaDll != null)
+            {
+                List<RtaTablaTarjeta> tarjetas = viaDll.Tarjetas();
+                ConError = viaDll.ConError;
+                MensajeError = viaDll.MensajeError;
+                if (tarjetas != null)
+                    foreach (RtaTablaTarjeta unatar in tarjetas)
+                        AccesoDb.AgregarTarjeta(unatar);
+                return;
+            }
             while (!ConError)
             {
                 comando = mtx.GetTablaTarjetas(i);
@@ -545,6 +590,16 @@ namespace Alberdi.TJOCommon.Prisma
             AccesoDb.LimpiarPlanes();
             EscribeLog("Hace comando Obtiene planes");
             ConError = false;
+            if (viaDll != null)
+            {
+                List<RtaTablaPlan> planes = viaDll.Planes();
+                ConError = viaDll.ConError;
+                MensajeError = viaDll.MensajeError;
+                if (planes != null)
+                    foreach (RtaTablaPlan unplan in planes)
+                        AccesoDb.AgregarPlan(unplan);
+                return;
+            }
             while (!ConError)
             {
                 comando = mtx.GetTablaPlanes(i);
@@ -563,7 +618,7 @@ namespace Alberdi.TJOCommon.Prisma
             RtaTrans mrta = null;
             string comando = mtx.GetUltimaOperacion();
             EscribeLog("Hace Comando Obtiene ultima operacion");
-            Comunicar(comando);
+            Operar(comando, d => d.UltimaTrans());
             //hasta aqui no hay error en la comunicacion
             if (!ConError)
             {
@@ -579,6 +634,14 @@ namespace Alberdi.TJOCommon.Prisma
             ConError = false;
             MensajeError = "";
             EscribeLog("Hace comando Obtener ultimo Cierre");
+            if (viaDll != null)
+            {
+                //   Igual que por serie, los datos solo quedan en el log.
+                viaDll.UltimoCierre();
+                ConError = viaDll.ConError;
+                MensajeError = viaDll.MensajeError;
+                return;
+            }
             while (!ConError)
             {
                 comando = mtx.GetUltCierre(i);
@@ -596,14 +659,14 @@ namespace Alberdi.TJOCommon.Prisma
         {
             string comando = mtx.ReimpreUltTrans();
             EscribeLog("Hace comando Reimprime ultima transaccion");
-            Comunicar(comando);
+            Operar(comando, d => d.ReimpreUltTrans());
         }
 
         public void ReimpreUltCierre()
         {
             string comando = mtx.ReimpreUltCierre();
             EscribeLog("Hace comando Reimprime ultimo Cierre");
-            Comunicar(comando);
+            Operar(comando, d => d.ReimpreUltCierre());
         }
 
         public void Dispose()
