@@ -2998,6 +2998,7 @@ void WriteEOPNoFiscal()
 	e.hora = (long) time_();				// Hora del ticket
 	e.cajero = ckaNro;						// Cajero cuando se genero la operacion
 	e.ptovta = atoi(pf->PuntoDeVenta());	// Punto de Venta cuando se cerro la operacion
+	STRCPY(e.perfilCaja, perfilCaja);		// perfil-caja, a la columna LOCAL
 	*e.ticketOriginal = 0;
 	e.enviadoCobradora = pasadoACobradora;
 	e.superv = numSuperv;
@@ -3218,6 +3219,7 @@ void WriteEOPFiscal(int fullAnul)
 	e.hora = (long) time_();				// Hora del ticket
 	e.cajero = ckaNro;						// Cajero que cerro la operacion
 	e.ptovta = atoi(pf->PuntoDeVenta());	// Punto de venta cuando se cerro la operacion
+	STRCPY(e.perfilCaja, perfilCaja);		// perfil-caja, a la columna LOCAL
     e.anuFlag = /*fullAnul*/hasarEop? 1: 0;				// Tipo de cierre.
 	e.tipoDoc = pf->TipoComprobante;
 	e.enviadoCobradora = pasadoACobradora;

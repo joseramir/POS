@@ -98,6 +98,11 @@ int clerk_ant;
 ///VARIABLES SAP
 char sapcnlvta[3];
 double sapimpiva;
+//   Perfil de la caja (datgral.ini [gral] perfil-caja: MI, MA, EC, PY). Decide que medios de
+//   mpagos.dbf (columna CAJAS) se ofrecen al cobrar y se graba en el func 3 (columna LOCAL).
+char perfilCaja[3];
+//   Medios habilitados en esta caja aunque CAJAS no incluya su perfil (mpagos-habilitar=22,40).
+char mpagosHabilitar[100];
 char saptienda[7];
 
 

@@ -83,8 +83,13 @@ struct mpag_ {
 	double mlimreca;
 	double alirecargo;
 
+	//   false = el medio no se ofrece al cobrar en esta caja (columna CAJAS de mpagos.dbf contra
+	//   perfil-caja). Igual se carga: el arqueo, la zeta y los teoricos de otras cajas lo necesitan.
+	bool habilitado;
+
 	mpag_()
 	{
+		habilitado = true;
 		nro = linkecr = voucher = vltocod = 0;
 		tipo = 0;
 		maxsal = descto = maxvlto = limgav = bolsin = 0;
@@ -1018,6 +1023,7 @@ struct DDeop_ {
 	char codMotivoNc[4];	//Motivo de la nota de Credito
 	int superv;				//supervisor que intervino en el ticket anulado
 	char writeOnline;		//Para identificar los que fueron grabados en base centralizada
+	char perfilCaja[3];		//perfil-caja de datgral.ini (MI, MA, EC, PY); va en la columna LOCAL
 };
 #ifdef IN_DUMP
 dDbf_ xxDDeop = { DEop, {
@@ -1037,6 +1043,7 @@ dDbf_ xxDDeop = { DEop, {
 	{ SZ_CHAR*4, 'C', "fecha_c" },
 	{ SZ_INT,     'I', "mpag" }, 
 	{ SZ_BOOL,    'T', "u_pend"}, 
+	{ SZ_CHAR*3,  'C', "local" },	// perfil-caja (CNLVTA es de SAP, no se toca)
 	{0}
 }};
 #endif

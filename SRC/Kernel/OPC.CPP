@@ -446,6 +446,15 @@ int LoadOpc()
 			STRCPY(sapcnlvta, auxcnlvta);
 		else 
 			STRCPY(sapcnlvta, "MI");
+		//   Perfil de la caja y medios de pago habilitados a mano (ver LoadMpag). Sin perfil la caja
+		//   ofrece todos los medios de mpagos.dbf, como antes de la columna CAJAS.
+		char *auxperfil = _strupr(ExtractIniStr(GRAL, "perfil-caja"));
+		Trim(auxperfil);
+		strncpy(perfilCaja, auxperfil, sizeof(perfilCaja) - 1);
+		perfilCaja[sizeof(perfilCaja) - 1] = 0;
+		char *auxmphab = ExtractIniStr(GRAL, "mpagos-habilitar");
+		strncpy(mpagosHabilitar, auxmphab, sizeof(mpagosHabilitar) - 1);
+		mpagosHabilitar[sizeof(mpagosHabilitar) - 1] = 0;
 		char *auxtienda = _strupr(ExtractIniStr(GRAL, "tienda"));
 		if (strlen(auxtienda) > 0) 
 			STRCPY(saptienda, auxtienda);

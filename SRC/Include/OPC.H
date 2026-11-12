@@ -124,6 +124,8 @@ extern int clerk_ant;
 ///VARIABLES PARA SAP
 extern char sapcnlvta[3];
 extern double sapimpiva;
+extern char perfilCaja[3];
+extern char mpagosHabilitar[100];
 extern char saptienda[7];
 
 extern ::ArrayList tjonAutor;

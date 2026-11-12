@@ -145,6 +145,7 @@ char *mp_extraible = new char[5];
 char *mp_desctomp = new char[5];
 char *mp_minextracc = new char[10];
 char *mp_maxextracc = new char[10];
+char *mp_cajas = new char[20];
 //char *mp_esvuelto = new char[5];
 //char *mp_recargo = new char[10];
 
@@ -580,6 +581,8 @@ bool TotalExtendido(::ArrayList *datos)
 			struct mpag_ *mp = &mpagos[i];
 			bool found = true;
 			if(retiCod == mp->nro)
+				found = false;
+			if(!mp->habilitado)					// CAJAS de mpagos.dbf no incluye el perfil de la caja
 				found = false;
 
 			if(found && (availPagos != NULL))
@@ -2145,6 +2148,10 @@ void mpago_(int cual, TarjInfo *info)
 
 	 //   Apunta a los datos de definicion del medio y efectua algunas validaciones.+
 	 p = BuscarMpag(cual);
+	 //   Un medio que esta caja no ofrece (CAJAS / perfil-caja) se trata como si no estuviera en la
+	 //   tabla, igual que cuando cada caja tenia su propio mpagos.dbf.
+	 if(p != NULL && !p->habilitado)
+		 p = NULL;
 	 if(inOper == 4 || inOper == 5)
 	 {
 		 if(p) cob_step2(p, xReg);
@@ -3695,6 +3702,52 @@ int mpgcmp3(void const *d1, void const *d2)
 //	delete varobliga;
 //}
 
+//   true si el codigo esta en una lista separada por comas ("22, 40").
+static bool CodigoEnLista(int nro, const char *lista)
+{
+	const char *p = lista;
+	while(*p)
+	{
+		while(*p == ' ' || *p == ',') p++;
+		if(!*p) break;
+		if(atoi(p) == nro) return true;
+		while(*p && *p != ',') p++;
+	}
+	return false;
+}
+
+//   true si el perfil esta en la columna CAJAS ("MI,MA,PY"). Compara cada elemento sin espacios.
+static bool PerfilEnCajas(const char *perfil, const char *cajas)
+{
+	const char *p = cajas;
+	while(*p)
+	{
+		while(*p == ' ' || *p == ',') p++;
+		if(!*p) break;
+		char tok[10];
+		int n = 0;
+		while(*p && *p != ',')
+		{
+			if(*p != ' ' && n < (int)sizeof(tok) - 1) tok[n++] = *p;
+			p++;
+		}
+		tok[n] = 0;
+		if(!_stricmp(tok, perfil)) return true;
+	}
+	return false;
+}
+
+//   Decide si el medio se ofrece al cobrar en esta caja: CAJAS vacia (o tabla sin la columna) = en
+//   todas; sin perfil-caja = todos (como antes); si no, el perfil tiene que estar en CAJAS o el codigo
+//   en mpagos-habilitar de datgral.ini.
+static bool MpagHabilitadoEnCaja(int nro, const char *cajas)
+{
+	if(cajas[0] == 0) return true;
+	if(perfilCaja[0] == 0) return true;
+	if(PerfilEnCajas(perfilCaja, cajas)) return true;
+	return CodigoEnLista(nro, mpagosHabilitar);
+}
+
 int LoadMpag()
 {
 	 struct mpag_ *mpg, *mpacu;
@@ -3733,6 +3786,8 @@ int LoadMpag()
 			 
 			 dbmpag.Get("mlimreca", mp_mlimreca);
 			 dbmpag.Get("porreca", mp_alirecargo);
+			 dbmpag.Get("cajas", mp_cajas);		// vacio si la tabla no tiene la columna
+			 Trim(mp_cajas);
 			 
 
 
@@ -3755,6 +3810,7 @@ int LoadMpag()
 
 			 mpg->mlimreca = atof(mp_mlimreca);
 			 mpg->alirecargo = atof(mp_alirecargo);
+			 mpg->habilitado = MpagHabilitadoEnCaja(mpg->nro, mp_cajas);
 
 			 if(mpg->tipo == 'Z')
 				 tickVltoNro = mpg->nro;
@@ -3821,6 +3877,24 @@ int LoadMpag()
 	 //LoadVueltos();
 	 if(cMpag > 0)
 		qsort(mpagos, cMpag, sizeof(struct mpag_), mpgcmp1);
+
+	 //   Deja en el log de arranque con que perfil quedo la caja y que medios no ofrece.
+	 {
+		 char logPerfil[300], ocultos[200];
+		 ocultos[0] = 0;
+		 for(int i = 0; i < cMpag; i++)
+		 {
+			 if(mpagos[i].habilitado) continue;
+			 if(strlen(ocultos) < sizeof(ocultos) - 8)
+				 sprintf(ocultos + strlen(ocultos), "%s%d", ocultos[0]? ",": "", mpagos[i].nro);
+		 }
+		 if(perfilCaja[0] == 0)
+			 sprintf(logPerfil, "AVISO - perfil-caja sin configurar en datgral.ini: se ofrecen todos los medios de pago (%d)", cMpag);
+		 else
+			 sprintf(logPerfil, "MPAGOS - perfil-caja=%s mpagos-habilitar='%s' medios=%d no ofrecidos: %s",
+				 perfilCaja, mpagosHabilitar, cMpag, ocultos[0]? ocultos: "ninguno");
+		 WriteBootLog(logPerfil);
+	 }
 	 mpconso->Sort(mpgcmp3);
 	 stackPagos = new ::ArrayList(true, "LoadMpag-stackPagos");
      return 1;

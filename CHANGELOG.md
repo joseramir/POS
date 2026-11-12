@@ -5,6 +5,41 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-12 - Medios de pago: una sola mpagos.dbf para todas las cajas (perfil-caja + columna CAJAS)
+
+Cada tipo de caja tenia su propio `mpagos.dbf` (ecommerce y PedidosYa lo reemplazaban por `mpagosecom.dbf` /
+`mpagospy.dbf`, la cobradora por `mpagosc15.dbf`). Ademas de mantener cuatro tablas, el arqueo y la zeta
+recorren solo los medios de la tabla local: el teorico de un medio de otra caja que no estaba en la tabla
+(`CalculateExpandedZeta`, `IncorporaVentaRemota`) se perdia sin aviso.
+
+### Cambio
+
+- `datgral.ini` `[gral]`:
+  - `perfil-caja` = `MI` (minorista), `MA` (mayorista), `EC` (ecommerce), `PY` (PedidosYa). Sin la clave la
+    caja ofrece todos los medios (como antes) y deja `AVISO - perfil-caja sin configurar` en el log de arranque.
+  - `mpagos-habilitar` = lista de codigos (`22` o `22,40`) que la caja ofrece aunque `CAJAS` no incluya su
+    perfil. Es para la cobradora (perfil `MA` + `mpagos-habilitar=22`, Noa Express Sin Rec), sin un perfil mas.
+- `mpagos.dbf`: columna nueva `CAJAS C(12)` con los perfiles separados por coma; vacia = todas las cajas.
+  Una tabla sin la columna se comporta como antes.
+- `MPAGO.CPP`: `LoadMpag` sigue cargando TODOS los medios y marca `mpag_::habilitado`. Solo se filtra lo que
+  el cajero elige para cobrar: la pantalla de pago (`TotalExtendido`) y las teclas directas (`mpago_`, el
+  medio no habilitado se trata como si no estuviera en la tabla). El arqueo, la zeta, los reprocesos y los
+  teoricos de otras cajas ven todos los medios. Log de arranque: `MPAGOS - perfil-caja=.. no ofrecidos: ..`.
+- `FUNCS.H` / `DUMP.CPP`: el registro `func = 3` (fin de ticket, fiscal y no fiscal) graba el perfil en la
+  columna `LOCAL` (`CNLVTA` es del proceso de SAP y no se toca). `TransSql/Exporta.cs` ya copia `LOCAL`.
+- Tabla unificada armada desde `mpagos.dbf` (valores de los codigos 1, 2, 3, 4 y 17 tal como estan ahi) + los
+  exclusivos: 22 de C15 (`CAJAS=XX`), 29 y 46 de PY, 31 y 34 de Ecom; 13 `MI,MA,PY`; 16 y 48 `MI,MA`;
+  32 `MI,MA,EC`. Cambia para Ecom el limite de gaveta del efectivo (8.000 -> 200.000), para PY la extraccion
+  maxima de debito (30.000 -> 170.000) y para C15 las denominaciones del arqueo y el tipo de Naranja (T -> E).
+
+### Despliegue
+
+Primero el posXP nuevo y `perfil-caja` (y `mpagos-habilitar` en las cobradoras) en cada caja; recien despues
+la `mpagos.dbf` unificada. Con el posXP anterior la tabla unificada mostraria en todas las cajas los medios
+exclusivos (22, 29, 31, 34, 46). Sin compilar ni probar.
+
+---
+
 ## 2026-11-12 - Newland (serie): limite de espera en anulacion/devolucion y rechazo tomado como anulada
 
 Dos defectos en `AnularTarjetaPrisma` (anulacion/devolucion de Prisma/Newland), vistos en la prueba del 12/11:
