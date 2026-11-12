@@ -134,7 +134,10 @@ namespace Alberdi.TJOCommon.Prisma
             sb.Append(string.Format("{0}", taux.NumeroCupon.ToString().PadLeft(7, '0')));
             sb.Append(string.Format("{0}", taux.FechaTransaccion));
             sb.Append(string.Format("{0}", trx.NroFactura.PadLeft(12, '0')));
-            sb.Append(string.Format("{0}", trx.CodigoComercio.PadRight(15, ' ')));
+            //   En la DEV el codigo de comercio va con ceros a la izquierda, como lo arma la DLL
+            //   oficial de Prisma (CmdRefund). Con blancos (como en la VEN) el Newland da ACK y
+            //   procesa pero no le contesta a la caja (12/11, cupon 129).
+            sb.Append(string.Format("{0}", trx.CodigoComercio.Trim().PadLeft(15, '0')));
             sb.Append(string.Format("{0}", trx.NombreComercio.PadRight(23, ' ')));
             sb.Append(string.Format("{0}", trx.CuitComercio.PadRight(23, ' ')));
             sb.Append(LineModeChar(trx.LineMode));

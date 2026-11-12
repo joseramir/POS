@@ -5,6 +5,29 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-12 - Newland (serie): codigo de comercio con ceros en la devolucion (DEV sin respuesta)
+
+Prueba del 12/11 10:08 por serie (con el linemode `'1'` del 11/11): devolucion del cupon 129. El Newland da
+ACK al comando DEV, procesa la devolucion y NO le manda la respuesta a la caja, que queda para siempre en
+"Buscando para Anular" (hubo que cerrar el POS). La misma devolucion con la app oficial de Prisma
+(`vpiPCAPP.log`, 13:38) contesta `DEV000` a los 23 s. Comparando byte a byte, la unica diferencia de
+contenido es el codigo de comercio: la DLL oficial (`CmdRefund`) lo manda con ceros a la izquierda
+(`000000037124153`) y la caja con blancos a la derecha (`37124153       `), copiado de la venta. En la
+VEN la DLL tambien usa blancos, por eso la venta nunca fallo.
+
+### Cambio
+
+- `TJOCommon/Prisma/ProtocoloTrxPrisma.cs`, `GetMensajeDevolucion()`: `CodigoComercio.Trim().PadLeft(15, '0')`.
+  VEN y VEC no cambian.
+
+### Probado el 12/11 (terminal de prueba, serie)
+
+- 10:56 venta EL $1.428,90 cupon 134, 10:57 cierre de lote, 10:58 DEV del 134: ACK y `DEV000` a los 22 s
+  (cupon 135, B48869). En `dbVerifone.db` el 134 queda Estado=2 y se agrega el 135 con Estado=3.
+- Queda abierto: la DEV del cupon 129 de las 10:08 sigue con Estado=0 en `dbVerifone.db`.
+
+---
+
 ## 2026-11-11 - Newland (serie): linemode '1' en vez de 0x01 (NAK con LRC 0x03)
 
 Causa del NAK del Newland con tarjeta EL (1 de cada 16 ventas, caja 7, ver 2026-09-16): el campo
