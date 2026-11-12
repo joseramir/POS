@@ -1005,6 +1005,13 @@ void AnularTarjetaPrisma(int cual)
 						Alert("No se pudo Anular", msgrta);
 					}
 				}
+				else
+				{
+					//   Antes un error (rechazo, sin respuesta del Newland, operacion no encontrada)
+					//   no mostraba nada: la pantalla volvia sola sin decir si se anulo o no.
+					Strings::StringToChar(hacer->MensajeError, msgrta, 60);
+					Alert("No se pudo Anular", msgrta);
+				}
 				delete hacer;
 			}
 			else if (unReq->TipoVerifone == 2)

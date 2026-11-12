@@ -20,6 +20,13 @@ namespace Alberdi.TJOCommon.Prisma
         private const int TSLEEP = 500;
 
         private const double TSEND = 5000;
+
+        //   Espera maxima de la respuesta de una anulacion o devolucion, una vez que el Newland dio
+        //   ACK al comando. La venta no tiene limite: la corta el cajero con Esc (MsgAlertPrisma).
+        //   La anulacion/devolucion corre en el hilo principal sin forma de cancelarla, y si la
+        //   terminal no contesta la caja quedaba para siempre en "Buscando para Anular" (12/11).
+        private const int TESPERA_ANUL_DEV = 180;
+        private int esperaMaxRespuesta = 0;     // segundos; 0 = sin limite
         //private const double TAUTOR = 90000;
 
         private string rtaport = "";
@@ -259,11 +266,25 @@ namespace Alberdi.TJOCommon.Prisma
                 //   rtaBase arranca en null para que ControlarRespuesta() pueda distinguir
                 //   "no hubo respuesta" de una respuesta vieja de otra operacion.
                 rtaBase = null;
+                DateTime inicioEsperaRta = DateTime.MinValue;
 
                 while (continuar && !Cancelado)
                 {
                     try
                     {
+                        //   numStep 4 = el Newland dio ACK al comando y se espera su respuesta.
+                        if (numStep == 4 && esperaMaxRespuesta > 0)
+                        {
+                            if (inicioEsperaRta == DateTime.MinValue)
+                                inicioEsperaRta = DateTime.Now;
+                            else if ((DateTime.Now - inicioEsperaRta).TotalSeconds > esperaMaxRespuesta)
+                            {
+                                ConError = true;
+                                MensajeError = "SIN RESPUESTA. VER EN EL NEWLAND SI SE HIZO, NO REPETIR";
+                                EscribeLog("Sin respuesta del Newland en " + esperaMaxRespuesta + " s: " + MensajeError);
+                                break;
+                            }
+                        }
                         if (canSend)
                         {
                             //arranca la comunicacion
@@ -504,7 +525,9 @@ namespace Alberdi.TJOCommon.Prisma
                         comando = mtx.GetMensajeAnulacion(rtaOrig.NumeroCupon, trxOrig.CodigoTarjeta);
                         porDll = d => d.Anulacion(trxDll, rtaDll);
                     }
-                    Operar(comando, porDll);
+                    esperaMaxRespuesta = TESPERA_ANUL_DEV;
+                    try { Operar(comando, porDll); }
+                    finally { esperaMaxRespuesta = 0; }
                     ControlarRespuesta();
                     if (!ConError)
                     {
@@ -522,7 +545,14 @@ namespace Alberdi.TJOCommon.Prisma
                             AccesoDb.GuardarTransaccion(trxOrig, mrta);
                         }
                         else
-                            MensajeError = "No se pudo anular/devol la operacion\n" + mrta.MensajeRespuesta;
+                        {
+                            //   Rechazada: tiene que volver como error. El llamador (AnularTarjetaPrisma)
+                            //   mira rta->CodigoRespuesta, que es el de la VENTA ORIGINAL (0), y sin
+                            //   ConError daba la anulacion por hecha y la grababa.
+                            ConError = true;
+                            MensajeError = "RECHAZADA: " + (mrta.MensajeRespuesta ?? "").Trim();
+                            EscribeLog("Anulacion/devolucion rechazada: " + MensajeError);
+                        }
                     }
                 }
                 else

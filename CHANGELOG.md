@@ -5,6 +5,31 @@ Formato de fecha: AAAA-MM-DD.
 
 ---
 
+## 2026-11-12 - Newland (serie): limite de espera en anulacion/devolucion y rechazo tomado como anulada
+
+Dos defectos en `AnularTarjetaPrisma` (anulacion/devolucion de Prisma/Newland), vistos en la prueba del 12/11:
+
+1. Sin limite de espera: la anulacion/devolucion corre en el hilo principal con `SendMsg("Buscando para
+   Anular")`, sin Esc, y `Comunicar()` espera la respuesta (despues del ACK al comando) sin temporizador. Si
+   el Newland no contesta, la caja queda colgada hasta cerrarla (12/11 10:08, DEV del cupon 129).
+2. Un rechazo se tomaba como anulada: el C++ decide con `rta->CodigoRespuesta`, que `GetTransaccion` carga
+   con la respuesta de la VENTA ORIGINAL (0). `HacerDevolAnul` ante un rechazo solo ponia `MensajeError`, sin
+   `ConError`, y la caja mostraba "Se Anulo la operacion" y llamaba a `GrabarAnulacionPrisma`.
+   Ademas, con `ConError` la caja no mostraba nada.
+
+### Cambio
+
+- `TJOCommon/Prisma/OperarTrxPrisma.cs`: `TESPERA_ANUL_DEV` = 180 s de espera de la respuesta, solo para
+  ANV/DEV por serie (la venta sigue sin limite, con Esc; el modo DLL tiene su propio timeout). Al vencer:
+  `ConError`, "SIN RESPUESTA. VER EN EL NEWLAND SI SE HIZO, NO REPETIR" y traza en LogPrisma. Rechazo de
+  ANV/DEV: `ConError` + "RECHAZADA: <mensaje del host>".
+- `SRC/Functions/TjOnline.cpp`, `AnularTarjetaPrisma`: con `ConError` muestra "No se pudo Anular" y el
+  motivo. Necesita compilar posXP; con el posXP anterior y la DLL nueva el rechazo ya no se graba como
+  anulacion, pero la caja vuelve sin aviso.
+- Sin probar el corte por tiempo ni el rechazo.
+
+---
+
 ## 2026-11-12 - Newland (serie): codigo de comercio con ceros en la devolucion (DEV sin respuesta)
 
 Prueba del 12/11 10:08 por serie (con el linemode `'1'` del 11/11): devolucion del cupon 129. El Newland da
